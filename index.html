@@ -650,9 +650,8 @@
 
       /* Two-column items grid in landscape */
       @media (min-width:1024px) {
-        .cat-group { display:contents; }
-        .cat-hdr { grid-column:1 / -1; margin-top:16px; }
-        .items-pad { display:grid; grid-template-columns:1fr 1fr; column-gap:14px; align-items:start; }
+        .items-pad { columns:2; column-gap:14px; }
+        .cat-group { break-inside:avoid; display:inline-block; width:100%; margin-top:14px; }
       }
 
       /* ── SUMMARY ── */
@@ -766,9 +765,6 @@
   </button>
   <button class="nav-btn" data-view="library">
     <span class="nav-ico">⭐</span><span class="nav-lbl">Library</span>
-  </button>
-  <button class="nav-btn" data-view="order">
-    <span class="nav-ico">📦</span><span class="nav-lbl">Orders</span>
   </button>
   <div class="sidebar-totals" style="display:none" id="sidebarTotals">
     <div class="sidebar-totals-row">
@@ -1115,9 +1111,19 @@ function render() {
   Object.entries(views).forEach(([v,id]) => {
     document.getElementById(id).style.display = S.view === v ? '' : 'none';
   });
-  const showBar = S.view === 'list' || S.view === 'bystore';
+  const isOrder = S.view === 'order';
+  const showBar = (S.view === 'list' || S.view === 'bystore') && !isOrder;
   document.querySelector('.quick-add-wrap').style.display = showBar ? '' : 'none';
   document.getElementById('filterBar').style.display = showBar ? '' : 'none';
+  // Hide shopping-specific header buttons in order view
+  document.getElementById('exportBtn').style.display = isOrder ? 'none' : '';
+  document.getElementById('storesBtn').style.display = isOrder ? 'none' : '';
+  // Hide nav tabs in order view on mobile
+  document.querySelectorAll('.nav-btn').forEach(b => b.style.display = isOrder ? 'none' : '');
+  if (isOrder) {
+    // Re-show sidebar brand and totals on tablet even in order view
+    initTabletUI();
+  }
   if (S.view === 'list')    rListView();
   if (S.view === 'bystore') rStoreView();
   if (S.view === 'summary') rSummaryView();
@@ -1127,7 +1133,11 @@ function render() {
 
 function rHeader() {
   const l = activeList();
-  document.getElementById('hdrListName').textContent = l ? l.name : 'My List';
+  if (S.view === 'order') {
+    document.getElementById('hdrListName').textContent = '📦 Weekly Orders';
+  } else {
+    document.getElementById('hdrListName').textContent = l ? l.name : 'My List';
+  }
 }
 
 function rFilterBar() {
@@ -1166,7 +1176,9 @@ function initTabletUI() {
 window.addEventListener('resize', initTabletUI);
 
 function rNav() {
-  document.querySelectorAll('.nav-btn').forEach(b => b.classList.toggle('active', b.dataset.view === S.view));
+  document.querySelectorAll('.nav-btn').forEach(b => {
+    b.classList.toggle('active', b.dataset.view === S.view);
+  });
 }
 
 // ── LIST VIEW ──────────────────────────────────────────────
@@ -1864,9 +1876,21 @@ function saveItemModal() {
 function openListModal() { rListModal(); openOverlay('listOverlay'); }
 function rListModal() {
   const body = document.getElementById('listSheetBody');
-  let h = '';
+  const isOrderView = S.view === 'order';
+
+  // Weekly Orders special entry
+  let h = `<div style="padding:0 0 10px; border-bottom:1.5px solid var(--border); margin-bottom:10px;">
+    <div class="list-row" id="weeklyOrdersRow" style="cursor:pointer; ${isOrderView?'background:rgba(184,115,51,0.08);border-radius:8px;padding:10px 8px;':'padding:10px 8px;'}">
+      <span style="font-size:18px;">📦</span>
+      <span class="list-row-name" style="font-weight:600;">Weekly Orders</span>
+      ${isOrderView ? '<span class="list-row-active">✓</span>' : '<span style="color:var(--amber);font-size:18px">→</span>'}
+    </div>
+  </div>`;
+
+  // Shopping lists
+  h += `<div style="padding:0 0 6px"><label class="f-label">Shopping Lists</label></div>`;
   S.lists.forEach(l => {
-    const isActive = l.id === S.activeListId;
+    const isActive = l.id === S.activeListId && !isOrderView;
     h += `<div class="list-row">
       <span class="list-row-name">${esc(l.name)}</span>
       ${isActive?'<span class="list-row-active">✓</span>':''}
@@ -1881,7 +1905,14 @@ function rListModal() {
     <button class="add-row-btn" id="newListBtn">Add</button></div></div>`;
   body.innerHTML = h;
 
-  body.querySelectorAll('[data-a="sw-list"]').forEach(b=>b.addEventListener('click',()=>{switchList(b.dataset.id);closeOverlay('listOverlay');}));
+  // Weekly Orders click
+  document.getElementById('weeklyOrdersRow').addEventListener('click', () => {
+    S.view = 'order'; save(); closeOverlay('listOverlay'); render();
+  });
+
+  body.querySelectorAll('[data-a="sw-list"]').forEach(b=>b.addEventListener('click',()=>{
+    S.view = 'list'; switchList(b.dataset.id); closeOverlay('listOverlay');
+  }));
   body.querySelectorAll('[data-a="del-list"]').forEach(b=>b.addEventListener('click',()=>{if(confirm('Delete this list and all its items?')){deleteList(b.dataset.id);rListModal();};}));
   body.querySelectorAll('[data-a="dup-list"]').forEach(b=>b.addEventListener('click',()=>{dupList(b.dataset.id);rListModal();}));
   body.querySelectorAll('[data-a="rename-list"]').forEach(b=>b.addEventListener('click',()=>{
@@ -1892,7 +1923,7 @@ function rListModal() {
 
   const btn = document.getElementById('newListBtn');
   const inp = document.getElementById('newListInput');
-  btn.addEventListener('click', ()=>{ const n=inp.value.trim(); if(n){addList(n);rListModal();inp.value='';} });
+  btn.addEventListener('click', ()=>{ const n=inp.value.trim(); if(n){S.view='list';addList(n);rListModal();inp.value='';closeOverlay('listOverlay');} });
   inp.addEventListener('keydown', e=>{ if(e.key==='Enter') btn.click(); });
 }
 
@@ -1987,7 +2018,9 @@ function init() {
   document.getElementById('storesBtn').addEventListener('click', openStoreModal);
 
   // Nav
-  document.querySelectorAll('.nav-btn').forEach(b=>b.addEventListener('click',()=>{S.view=b.dataset.view;save();render();}));
+  document.querySelectorAll('.nav-btn').forEach(b=>b.addEventListener('click',()=>{
+    if (b.dataset.view) { S.view = b.dataset.view; save(); render(); }
+  }));
 
   // Item modal
   document.getElementById('itemClose').addEventListener('click',()=>closeOverlay('itemOverlay'));
