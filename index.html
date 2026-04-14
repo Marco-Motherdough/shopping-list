@@ -483,7 +483,77 @@
       min-width:72px; text-align:center; line-height:1;
     }
 
-    /* Desktop centering (small screens only) */
+    /* ── WEEKLY ORDER VIEW ─────────────────────────────────── */
+    .order-pad { padding:0 14px 24px; }
+    .order-toolbar {
+      display:flex; gap:8px; padding:10px 14px 8px;
+      border-bottom:1px solid var(--border);
+      position:sticky; top:var(--hdr-h); background:var(--cream); z-index:50;
+    }
+    .order-toolbar .btn-primary { width:auto; height:40px; padding:0 18px; margin:0; font-size:14px; border-radius:20px; }
+    .order-toolbar .btn-sec { width:auto; height:40px; padding:0 14px; margin:0; font-size:14px; border-radius:20px; }
+    .supplier-block { margin-top:18px; }
+    .supplier-hdr {
+      display:flex; align-items:center; justify-content:space-between;
+      background: var(--dark); color:#fff;
+      padding:12px 16px; border-radius:var(--r) var(--r) 0 0;
+    }
+    .supplier-hdr-left { display:flex; align-items:center; gap:8px; }
+    .supplier-hdr-name { font-family:'Playfair Display',serif; font-size:17px; font-weight:600; }
+    .supplier-hdr-count { font-size:12px; color:rgba(255,255,255,.55); }
+    .supplier-add-btn {
+      background:rgba(255,255,255,.15); border:none; border-radius:8px;
+      color:#fff; font-size:13px; font-weight:600; padding:6px 12px;
+      cursor:pointer;
+    }
+    .supplier-add-btn:active { background:rgba(255,255,255,.25); }
+    .order-item-row {
+      background:var(--white); border-left:1px solid var(--border); border-right:1px solid var(--border);
+      padding:11px 14px;
+      display:flex; align-items:center; gap:10px;
+      border-bottom:1px solid var(--cream-mid);
+    }
+    .order-item-row:last-of-type { border-bottom:1px solid var(--border); }
+    .order-item-body { flex:1; min-width:0; }
+    .order-item-name { font-size:15px; font-weight:500; }
+    .order-item-meta { font-size:12px; color:var(--muted); margin-top:2px; display:flex; gap:8px; flex-wrap:wrap; }
+    .order-item-sku { background:var(--cream-dark); border-radius:4px; padding:1px 6px; font-size:11px; font-weight:600; color:var(--muted); }
+    .order-item-size { font-size:11px; color:var(--muted); }
+    .order-item-right { text-align:right; flex-shrink:0; }
+    .order-item-total { font-size:15px; font-weight:600; color:var(--dark); }
+    .order-item-unit { font-size:11px; color:var(--muted); margin-top:1px; }
+    .order-item-edit {
+      background:none; border:none; color:var(--muted); font-size:16px;
+      width:32px; height:32px; border-radius:8px; cursor:pointer;
+      display:flex; align-items:center; justify-content:center; flex-shrink:0;
+    }
+    .order-item-edit:active { background:var(--cream-mid); color:var(--amber); }
+    .supplier-total-row {
+      background:var(--cream-dark);
+      padding:11px 16px;
+      display:flex; justify-content:space-between; align-items:center;
+      border:1px solid var(--border); border-top:none;
+      border-radius:0 0 var(--r) var(--r);
+    }
+    .supplier-total-lbl { font-size:13px; font-weight:600; color:var(--muted); text-transform:uppercase; letter-spacing:.05em; }
+    .supplier-total-val { font-size:17px; font-weight:700; color:var(--dark); }
+    .order-grand-total {
+      margin-top:20px; background:var(--dark); border-radius:var(--r);
+      padding:16px 18px; display:flex; justify-content:space-between; align-items:center;
+    }
+    .order-grand-lbl { font-size:13px; color:rgba(255,255,255,.6); text-transform:uppercase; letter-spacing:.06em; }
+    .order-grand-val { font-family:'Playfair Display',serif; font-size:26px; font-weight:700; color:var(--amber); }
+    .order-empty { text-align:center; padding:60px 28px; }
+
+    @media (min-width:768px) {
+      .order-toolbar { padding:14px 28px 12px; top:var(--hdr-h); }
+      .order-pad { padding:0 28px 24px; }
+      .supplier-hdr-name { font-size:18px; }
+    }
+    @media (min-width:1024px) {
+      .order-toolbar { padding:16px 32px 12px; }
+      .order-pad { padding:0 32px 24px; }
+    }
     @media (min-width:600px) and (max-width:767px) {
       .header, .bottom-nav { max-width:600px; left:50%; right:auto; transform:translateX(-50%); }
       .main { max-width:600px; margin:0 auto; }
@@ -679,6 +749,7 @@
   <div id="storeView" style="display:none"></div>
   <div id="summaryView" class="summary-pad" style="display:none"></div>
   <div id="libraryView" style="display:none"></div>
+  <div id="orderView" style="display:none"></div>
 </main>
 
 <!-- BOTTOM NAV / SIDEBAR -->
@@ -695,6 +766,9 @@
   </button>
   <button class="nav-btn" data-view="library">
     <span class="nav-ico">⭐</span><span class="nav-lbl">Library</span>
+  </button>
+  <button class="nav-btn" data-view="order">
+    <span class="nav-ico">📦</span><span class="nav-lbl">Orders</span>
   </button>
   <div class="sidebar-totals" style="display:none" id="sidebarTotals">
     <div class="sidebar-totals-row">
@@ -815,6 +889,63 @@
   </div>
 </div>
 
+<!-- MODAL: Add/Edit Order Item -->
+<div class="overlay" id="orderItemOverlay">
+  <div class="sheet">
+    <div class="sheet-handle"></div>
+    <div class="sheet-hdr">
+      <h2 class="sheet-title" id="orderItemTitle">Add Order Item</h2>
+      <button class="sheet-close" id="orderItemClose">✕</button>
+    </div>
+    <div class="sheet-body">
+      <input type="hidden" id="oEditId" />
+      <input type="hidden" id="oSupplierId" />
+      <div class="f-group">
+        <label class="f-label">Item Name *</label>
+        <input class="f-input" id="oName" type="text" placeholder="e.g. Flour 5kg" autocomplete="off" />
+      </div>
+      <div class="f-group">
+        <label class="f-label">Supplier</label>
+        <select class="f-input" id="oSupplier"></select>
+      </div>
+      <div class="f-row">
+        <div class="f-group">
+          <label class="f-label">SKU / Code</label>
+          <input class="f-input" id="oSku" type="text" placeholder="e.g. FL-001" autocomplete="off" />
+        </div>
+        <div class="f-group">
+          <label class="f-label">Size / Unit</label>
+          <input class="f-input" id="oSize" type="text" placeholder="e.g. 5kg, 1L" autocomplete="off" />
+        </div>
+      </div>
+      <div class="f-row">
+        <div class="f-group">
+          <label class="f-label">Price (R)</label>
+          <input class="f-input" id="oPrice" type="number" min="0" step="0.01" placeholder="0.00" inputmode="decimal" />
+        </div>
+        <div class="f-group">
+          <label class="f-label">Quantity</label>
+          <input class="f-input" id="oQty" type="number" min="1" step="1" value="1" inputmode="numeric" />
+        </div>
+      </div>
+      <button class="btn-primary" id="saveOrderItemBtn">Save Item</button>
+      <button class="btn-sec btn-danger" id="deleteOrderItemBtn" style="display:none">Delete Item</button>
+    </div>
+  </div>
+</div>
+
+<!-- MODAL: Manage Suppliers -->
+<div class="overlay" id="supplierOverlay">
+  <div class="sheet">
+    <div class="sheet-handle"></div>
+    <div class="sheet-hdr">
+      <h2 class="sheet-title">Suppliers</h2>
+      <button class="sheet-close" id="supplierClose">✕</button>
+    </div>
+    <div class="sheet-body" id="supplierSheetBody"></div>
+  </div>
+</div>
+
 <!-- TOAST -->
 <div class="toast" id="toast"></div>
 
@@ -845,9 +976,11 @@ let S = {
   lists: [],
   stores: [],
   activeListId: null,
-  view: 'list',          // list | bystore | summary | library
+  view: 'list',
   filterStore: 'all',
-  savedItems: [],        // library of reusable item templates
+  savedItems: [],
+  suppliers: [],       // weekly order suppliers
+  orderItems: [],      // weekly order items
 };
 
 const uid = () => Date.now().toString(36) + Math.random().toString(36).slice(2,6);
@@ -879,7 +1012,7 @@ function load() {
     if (raw) { S = { ...S, ...JSON.parse(raw) }; return; }
   } catch(e) {}
   // First run
-  const l = mkList('Weekly Shop');
+  const l = mkList('Shopping List');
   S.lists = [l];
   S.activeListId = l.id;
   S.stores = DEF_STORES.map(n => ({ id: uid(), name: n }));
@@ -978,11 +1111,10 @@ function deleteStore(id) {
 // ═══════════════════════════════════════════════════════════
 function render() {
   rHeader(); rFilterBar(); rTotals(); rNav();
-  const views = { list:'listView', bystore:'storeView', summary:'summaryView', library:'libraryView' };
+  const views = { list:'listView', bystore:'storeView', summary:'summaryView', library:'libraryView', order:'orderView' };
   Object.entries(views).forEach(([v,id]) => {
     document.getElementById(id).style.display = S.view === v ? '' : 'none';
   });
-  // Hide quick-add and filters on library/summary
   const showBar = S.view === 'list' || S.view === 'bystore';
   document.querySelector('.quick-add-wrap').style.display = showBar ? '' : 'none';
   document.getElementById('filterBar').style.display = showBar ? '' : 'none';
@@ -990,6 +1122,7 @@ function render() {
   if (S.view === 'bystore') rStoreView();
   if (S.view === 'summary') rSummaryView();
   if (S.view === 'library') rLibraryView();
+  if (S.view === 'order')   rOrderView();
 }
 
 function rHeader() {
@@ -1432,7 +1565,239 @@ function showSuggestions(query) {
 function hideSuggestions() {
   document.getElementById('suggestionsDrop').classList.remove('open');
 }
-function openOverlay(id)  { document.getElementById(id).classList.add('open'); }
+
+// ═══════════════════════════════════════════════════════════
+// WEEKLY ORDER
+// ═══════════════════════════════════════════════════════════
+function mkOrderItem(d) {
+  return {
+    id: uid(),
+    supplierId: d.supplierId || '',
+    name: (d.name||'').trim(),
+    sku: (d.sku||'').trim(),
+    size: (d.size||'').trim(),
+    price: parseFloat(d.price)||0,
+    quantity: parseInt(d.quantity)||1,
+    createdAt: Date.now(),
+  };
+}
+
+function addSupplier(name) {
+  name = name.trim(); if (!name) return;
+  if (!S.suppliers) S.suppliers = [];
+  if (S.suppliers.find(s => s.name.toLowerCase() === name.toLowerCase())) { toast('Supplier already exists'); return; }
+  S.suppliers.push({ id: uid(), name }); save(); render();
+}
+function deleteSupplier(id) {
+  if (!confirm('Delete this supplier and all their order items?')) return;
+  S.suppliers = (S.suppliers||[]).filter(s => s.id !== id);
+  S.orderItems = (S.orderItems||[]).filter(i => i.supplierId !== id);
+  save(); rOrderView(); rSupplierModal();
+}
+function addOrderItem(d) {
+  if (!S.orderItems) S.orderItems = [];
+  S.orderItems.push(mkOrderItem(d)); save(); rOrderView();
+}
+function updateOrderItem(id, d) {
+  const idx = (S.orderItems||[]).findIndex(i => i.id === id); if (idx < 0) return;
+  S.orderItems[idx] = { ...S.orderItems[idx], ...d }; save(); rOrderView();
+}
+function deleteOrderItem(id) {
+  S.orderItems = (S.orderItems||[]).filter(i => i.id !== id); save(); rOrderView();
+}
+
+// ── ORDER VIEW RENDER ──────────────────────────────────────
+function rOrderView() {
+  const container = document.getElementById('orderView');
+  const suppliers = S.suppliers || [];
+  const orderItems = S.orderItems || [];
+
+  let h = `<div class="order-toolbar">
+    <button class="btn-primary" id="oAddItemBtn">+ Add Item</button>
+    <button class="btn-sec" id="oManageSuppliersBtn">🏭 Suppliers</button>
+    <button class="btn-sec" id="oExportBtn">⬆️ Export</button>
+  </div>
+  <div class="order-pad">`;
+
+  if (suppliers.length === 0) {
+    h += `<div class="order-empty">
+      <div class="empty-ico">🏭</div>
+      <h2 class="empty-ttl">No suppliers yet</h2>
+      <p class="empty-sub">Tap "Suppliers" to add your first supplier,<br>then add items to build your order.</p>
+    </div>`;
+  } else {
+    let grandTotal = 0;
+    suppliers.forEach(sup => {
+      const items = orderItems.filter(i => i.supplierId === sup.id);
+      const supTotal = items.reduce((s, i) => s + i.price * i.quantity, 0);
+      grandTotal += supTotal;
+
+      h += `<div class="supplier-block">
+        <div class="supplier-hdr">
+          <div class="supplier-hdr-left">
+            <div class="supplier-hdr-name">${esc(sup.name)}</div>
+            <div class="supplier-hdr-count">${items.length} item${items.length!==1?'s':''}</div>
+          </div>
+          <button class="supplier-add-btn" data-sup="${sup.id}">+ Add Item</button>
+        </div>`;
+
+      if (items.length === 0) {
+        h += `<div class="order-item-row"><span style="color:var(--muted);font-size:13px;font-style:italic">No items yet — tap + Add Item</span></div>`;
+      } else {
+        items.forEach(item => {
+          const lt = item.price * item.quantity;
+          h += `<div class="order-item-row">
+            <div class="order-item-body">
+              <div class="order-item-name">${esc(item.name)}</div>
+              <div class="order-item-meta">
+                ${item.sku ? `<span class="order-item-sku">${esc(item.sku)}</span>` : ''}
+                ${item.size ? `<span class="order-item-size">${esc(item.size)}</span>` : ''}
+                <span>×${item.quantity}</span>
+                <span>@ ${R(item.price)}</span>
+              </div>
+            </div>
+            <div class="order-item-right">
+              <div class="order-item-total">${R(lt)}</div>
+              ${item.quantity > 1 ? `<div class="order-item-unit">${R(item.price)} each</div>` : ''}
+            </div>
+            <button class="order-item-edit" data-oedit="${item.id}">✎</button>
+          </div>`;
+        });
+      }
+
+      h += `<div class="supplier-total-row">
+        <span class="supplier-total-lbl">Total</span>
+        <span class="supplier-total-val">${R(supTotal)}</span>
+      </div></div>`;
+    });
+
+    if (suppliers.length > 0) {
+      h += `<div class="order-grand-total">
+        <span class="order-grand-lbl">Grand Total</span>
+        <span class="order-grand-val">${R(grandTotal)}</span>
+      </div>`;
+    }
+  }
+
+  h += `</div>`;
+  container.innerHTML = h;
+
+  document.getElementById('oAddItemBtn')?.addEventListener('click', () => openOrderItemModal());
+  document.getElementById('oManageSuppliersBtn')?.addEventListener('click', () => { rSupplierModal(); openOverlay('supplierOverlay'); });
+  document.getElementById('oExportBtn')?.addEventListener('click', exportOrder);
+  container.querySelectorAll('[data-sup]').forEach(b => b.addEventListener('click', () => openOrderItemModal(b.dataset.sup)));
+  container.querySelectorAll('[data-oedit]').forEach(b => b.addEventListener('click', () => openOrderItemModal(null, b.dataset.oedit)));
+}
+
+// ── ORDER ITEM MODAL ───────────────────────────────────────
+function populateSupplierSelect(selectedId) {
+  const sel = document.getElementById('oSupplier');
+  const suppliers = S.suppliers || [];
+  if (suppliers.length === 0) {
+    sel.innerHTML = `<option value="">— Add a supplier first —</option>`;
+  } else {
+    sel.innerHTML = suppliers.map(s => `<option value="${s.id}"${s.id===selectedId?' selected':''}>${esc(s.name)}</option>`).join('');
+  }
+}
+function openOrderItemModal(supplierId=null, editId=null) {
+  document.getElementById('oEditId').value = editId || '';
+  document.getElementById('orderItemTitle').textContent = editId ? 'Edit Order Item' : 'Add Order Item';
+  document.getElementById('deleteOrderItemBtn').style.display = editId ? '' : 'none';
+
+  if (editId) {
+    const item = (S.orderItems||[]).find(i => i.id === editId);
+    if (!item) return;
+    populateSupplierSelect(item.supplierId);
+    document.getElementById('oName').value = item.name;
+    document.getElementById('oSku').value = item.sku || '';
+    document.getElementById('oSize').value = item.size || '';
+    document.getElementById('oPrice').value = item.price || '';
+    document.getElementById('oQty').value = item.quantity || 1;
+  } else {
+    populateSupplierSelect(supplierId || (S.suppliers?.[0]?.id || ''));
+    document.getElementById('oName').value = '';
+    document.getElementById('oSku').value = '';
+    document.getElementById('oSize').value = '';
+    document.getElementById('oPrice').value = '';
+    document.getElementById('oQty').value = '1';
+  }
+  openOverlay('orderItemOverlay');
+  setTimeout(() => document.getElementById('oName').focus(), 350);
+}
+function saveOrderItemModal() {
+  const editId = document.getElementById('oEditId').value;
+  const name = document.getElementById('oName').value.trim();
+  if (!name) { document.getElementById('oName').focus(); return; }
+  const supplierId = document.getElementById('oSupplier').value;
+  if (!supplierId) { toast('Please add a supplier first'); return; }
+  const d = {
+    supplierId,
+    name,
+    sku:      document.getElementById('oSku').value.trim(),
+    size:     document.getElementById('oSize').value.trim(),
+    price:    parseFloat(document.getElementById('oPrice').value) || 0,
+    quantity: parseInt(document.getElementById('oQty').value) || 1,
+  };
+  if (editId) { updateOrderItem(editId, d); toast('Item updated'); }
+  else        { addOrderItem(d);            toast('Item added'); }
+  closeOverlay('orderItemOverlay');
+}
+
+// ── SUPPLIER MODAL ─────────────────────────────────────────
+function rSupplierModal() {
+  const body = document.getElementById('supplierSheetBody');
+  const suppliers = S.suppliers || [];
+  let h = '';
+  if (!suppliers.length) h = `<p style="color:var(--muted);font-size:14px;padding:6px 0 12px">No suppliers yet.</p>`;
+  suppliers.forEach(s => {
+    const count = (S.orderItems||[]).filter(i => i.supplierId === s.id).length;
+    h += `<div class="store-row">
+      <div style="flex:1;min-width:0">
+        <div class="store-row-name">${esc(s.name)}</div>
+        <div style="font-size:12px;color:var(--muted)">${count} item${count!==1?'s':''}</div>
+      </div>
+      <button class="row-btn danger" data-delsup="${s.id}">🗑️</button>
+    </div>`;
+  });
+  h += `<div style="margin-top:16px"><label class="f-label">Add new supplier</label>
+    <div class="new-item-row">
+      <input class="f-input" id="newSupplierInput" type="text" placeholder="e.g. Bidvest, PnP Trade" />
+      <button class="add-row-btn" id="newSupplierBtn">Add</button>
+    </div></div>`;
+  body.innerHTML = h;
+  body.querySelectorAll('[data-delsup]').forEach(b => b.addEventListener('click', () => deleteSupplier(b.dataset.delsup)));
+  const btn = document.getElementById('newSupplierBtn');
+  const inp = document.getElementById('newSupplierInput');
+  btn.addEventListener('click', () => { addSupplier(inp.value); inp.value = ''; rSupplierModal(); });
+  inp.addEventListener('keydown', e => { if (e.key === 'Enter') btn.click(); });
+}
+
+// ── ORDER EXPORT ───────────────────────────────────────────
+function exportOrder() {
+  const suppliers = S.suppliers || [];
+  const orderItems = S.orderItems || [];
+  let txt = `📦 Weekly Order\n📅 ${new Date().toLocaleDateString('en-ZA',{weekday:'long',year:'numeric',month:'long',day:'numeric'})}\n\n`;
+  let grand = 0;
+  suppliers.forEach(sup => {
+    const items = orderItems.filter(i => i.supplierId === sup.id);
+    if (!items.length) return;
+    txt += `${sup.name}:\n`;
+    items.forEach(i => {
+      const lt = i.price * i.quantity;
+      const sku = i.sku ? ` [${i.sku}]` : '';
+      const size = i.size ? ` (${i.size})` : '';
+      const qty = i.quantity > 1 ? ` ×${i.quantity} @ ${R(i.price)} ea` : ` — ${R(i.price)}`;
+      txt += `  • ${i.name}${size}${sku}${qty} = ${R(lt)}\n`;
+    });
+    const supTotal = items.reduce((s,i) => s + i.price * i.quantity, 0);
+    grand += supTotal;
+    txt += `  Total = ${R(supTotal)}\n\n`;
+  });
+  txt += `${'─'.repeat(32)}\nGrand Total = ${R(grand)}`;
+
+  document.getElementById('exportTA').value = txt;
+  openOverlay('exportOverlay');
+}
 function closeOverlay(id) { document.getElementById(id).classList.remove('open'); }
 
 // ── ITEM MODAL ─────────────────────────────────────────────
@@ -1649,9 +2014,21 @@ function init() {
   });
 
   // Overlay backdrop tap to close
-  ['itemOverlay','listOverlay','storeOverlay','exportOverlay'].forEach(id=>{
+  ['itemOverlay','listOverlay','storeOverlay','exportOverlay','orderItemOverlay','supplierOverlay'].forEach(id=>{
     document.getElementById(id).addEventListener('click',e=>{if(e.target.id===id)closeOverlay(id);});
   });
+
+  // Order item modal
+  document.getElementById('orderItemClose').addEventListener('click', ()=>closeOverlay('orderItemOverlay'));
+  document.getElementById('saveOrderItemBtn').addEventListener('click', saveOrderItemModal);
+  document.getElementById('deleteOrderItemBtn').addEventListener('click', ()=>{
+    const id = document.getElementById('oEditId').value;
+    if (id && confirm('Delete this order item?')) { deleteOrderItem(id); closeOverlay('orderItemOverlay'); toast('Item deleted'); }
+  });
+  document.getElementById('oName').addEventListener('keydown', e=>{ if(e.key==='Enter') saveOrderItemModal(); });
+
+  // Supplier modal
+  document.getElementById('supplierClose').addEventListener('click', ()=>closeOverlay('supplierOverlay'));
 }
 
 // ═══════════════════════════════════════════════════════════
