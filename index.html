@@ -1005,7 +1005,13 @@ function save() {
 function load() {
   try {
     const raw = localStorage.getItem(SK);
-    if (raw) { S = { ...S, ...JSON.parse(raw) }; return; }
+    if (raw) {
+      S = { ...S, ...JSON.parse(raw) };
+      // Migrate: rename "Weekly Shop" → "Shopping List"
+      S.lists.forEach(l => { if (l.name === 'Weekly Shop') l.name = 'Shopping List'; });
+      save();
+      return;
+    }
   } catch(e) {}
   // First run
   const l = mkList('Shopping List');
@@ -1810,6 +1816,7 @@ function exportOrder() {
   document.getElementById('exportTA').value = txt;
   openOverlay('exportOverlay');
 }
+function openOverlay(id)  { document.getElementById(id).classList.add('open'); }
 function closeOverlay(id) { document.getElementById(id).classList.remove('open'); }
 
 // ── ITEM MODAL ─────────────────────────────────────────────
