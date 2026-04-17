@@ -418,7 +418,19 @@
     /* ── LIBRARY VIEW ──────────────────────────────────────── */
     .lib-pad { padding:14px; }
     .lib-pad h2 { font-family:'Playfair Display',serif; font-size:20px; margin-bottom:4px; }
-    .lib-sub { font-size:13px; color:var(--muted); margin-bottom:14px; }
+    .lib-sub { font-size:13px; color:var(--muted); margin-bottom:10px; }
+    .lib-transfer-row {
+      display:flex; gap:8px; margin-bottom:12px; flex-wrap:wrap;
+    }
+    .lib-transfer-btn {
+      flex:1; min-width:120px; height:38px; border-radius:9px;
+      border:1.5px solid var(--border); background:var(--white);
+      font-family:'DM Sans',sans-serif; font-size:13px; font-weight:600;
+      color:var(--dark); cursor:pointer; display:flex; align-items:center;
+      justify-content:center; gap:6px; transition: all .15s;
+    }
+    .lib-transfer-btn.primary { background:var(--amber); border-color:var(--amber); color:white; }
+    .lib-transfer-btn:active { opacity:.8; }
     .lib-search {
       width:100%; height:44px;
       border:1.5px solid var(--border); border-radius:22px;
@@ -1491,6 +1503,11 @@ function rLibraryView() {
   let h = `<div class="lib-pad">
     <h2>Item Library</h2>
     <p class="lib-sub">Save items here to quickly add them to any list.</p>
+    <div class="lib-transfer-row">
+      <button class="lib-transfer-btn primary" onclick="downloadLibrary()">⬇ Download Library</button>
+      <button class="lib-transfer-btn" onclick="document.getElementById('libUploadInput').click()">⬆ Upload Library</button>
+      <input type="file" id="libUploadInput" accept=".json" style="display:none" onchange="uploadLibrary(event)">
+    </div>
     <div class="lib-search-wrap">
       <span class="lib-search-ico">🔍</span>
       <input class="lib-search" id="libSearch" type="text" placeholder="Search saved items…" autocomplete="off" value="${esc(query)}" oninput="rLibraryView()" />
@@ -1765,8 +1782,12 @@ function saveOrderItemModal() {
 function rSupplierModal() {
   const body = document.getElementById('supplierSheetBody');
   const suppliers = S.suppliers || [];
-  let h = '';
-  if (!suppliers.length) h = `<p style="color:var(--muted);font-size:14px;padding:6px 0 12px">No suppliers yet.</p>`;
+  let h = `<div class="lib-transfer-row" style="margin-bottom:14px">
+    <button class="lib-transfer-btn primary" onclick="downloadSuppliers()">⬇ Download Suppliers</button>
+    <button class="lib-transfer-btn" onclick="document.getElementById('supUploadInput').click()">⬆ Upload Suppliers</button>
+    <input type="file" id="supUploadInput" accept=".json" style="display:none" onchange="uploadSuppliers(event)">
+  </div>`;
+  if (!suppliers.length) h += `<p style="color:var(--muted);font-size:14px;padding:6px 0 12px">No suppliers yet.</p>`;
   suppliers.forEach(s => {
     const count = (S.orderItems||[]).filter(i => i.supplierId === s.id).length;
     h += `<div class="store-row">
@@ -1987,8 +2008,109 @@ function openExportModal() {
 }
 
 // ═══════════════════════════════════════════════════════════
-// TOAST
+// TRANSFER — LIBRARY & SUPPLIERS
 // ═══════════════════════════════════════════════════════════
+function downloadJSON(data, filename) {
+  const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url; a.download = filename;
+  document.body.appendChild(a); a.click();
+  document.body.removeChild(a);
+  URL.revokeObjectURL(url);
+}
+
+function downloadLibrary() {
+  const items = S.savedItems || [];
+  if (!items.length) { toast('Library is empty — nothing to download'); return; }
+  downloadJSON({ type: 'cartly-library', version: 1, exportedAt: new Date().toISOString(), items }, 'cartly-library.json');
+  toast(`Downloaded ${items.length} library items`);
+}
+
+function uploadLibrary(event) {
+  const file = event.target.files[0];
+  if (!file) return;
+  const reader = new FileReader();
+  reader.onload = e => {
+    try {
+      const data = JSON.parse(e.target.result);
+      if (data.type !== 'cartly-library' || !Array.isArray(data.items)) {
+        toast('Invalid file — please use a cartly library export'); return;
+      }
+      const existing = S.savedItems || [];
+      let added = 0, updated = 0;
+      data.items.forEach(item => {
+        const idx = existing.findIndex(x => x.name.toLowerCase() === item.name.toLowerCase());
+        const entry = { id: item.id || uid(), name: item.name, category: item.category || 'Other', store: item.store || 'any', price: item.price || 0, quantity: item.quantity || 1, notes: item.notes || '' };
+        if (idx >= 0) { existing[idx] = { ...existing[idx], ...entry }; updated++; }
+        else { existing.push(entry); added++; }
+      });
+      S.savedItems = existing;
+      save(); rLibraryView();
+      toast(`Library updated: ${added} added, ${updated} updated`);
+    } catch(err) { toast('Could not read file — make sure it is a valid cartly export'); }
+  };
+  reader.readAsText(file);
+  event.target.value = '';
+}
+
+function downloadSuppliers() {
+  const suppliers = S.suppliers || [];
+  const orderItems = S.orderItems || [];
+  if (!suppliers.length) { toast('No suppliers to download'); return; }
+  downloadJSON({ type: 'cartly-suppliers', version: 1, exportedAt: new Date().toISOString(), suppliers, orderItems }, 'cartly-suppliers.json');
+  toast(`Downloaded ${suppliers.length} suppliers`);
+}
+
+function uploadSuppliers(event) {
+  const file = event.target.files[0];
+  if (!file) return;
+  const reader = new FileReader();
+  reader.onload = e => {
+    try {
+      const data = JSON.parse(e.target.result);
+      if (data.type !== 'cartly-suppliers' || !Array.isArray(data.suppliers)) {
+        toast('Invalid file — please use a cartly suppliers export'); return;
+      }
+      // Merge suppliers by name
+      const existing = S.suppliers || [];
+      let addedSup = 0;
+      const idMap = {}; // old id -> new/existing id
+      data.suppliers.forEach(sup => {
+        const idx = existing.findIndex(x => x.name.toLowerCase() === sup.name.toLowerCase());
+        if (idx >= 0) {
+          idMap[sup.id] = existing[idx].id;
+        } else {
+          const newId = uid();
+          idMap[sup.id] = newId;
+          existing.push({ id: newId, name: sup.name });
+          addedSup++;
+        }
+      });
+      S.suppliers = existing;
+
+      // Merge order items, remapping supplier IDs
+      const existingItems = S.orderItems || [];
+      let addedItems = 0;
+      (data.orderItems || []).forEach(item => {
+        const newSupId = idMap[item.supplierId];
+        if (!newSupId) return;
+        // Dedupe by name + supplier
+        const exists = existingItems.find(x => x.name.toLowerCase() === item.name.toLowerCase() && idMap[item.supplierId] === x.supplierId);
+        if (!exists) {
+          existingItems.push({ ...item, id: uid(), supplierId: newSupId });
+          addedItems++;
+        }
+      });
+      S.orderItems = existingItems;
+
+      save(); rSupplierModal(); if (S.view === 'order') rOrderView();
+      toast(`${addedSup} suppliers and ${addedItems} order items added`);
+    } catch(err) { toast('Could not read file — make sure it is a valid cartly export'); }
+  };
+  reader.readAsText(file);
+  event.target.value = '';
+}
 let toastTimer;
 function toast(msg) {
   const el = document.getElementById('toast');
