@@ -704,6 +704,37 @@
       .toast { bottom:28px; }
     }
 
+    /* ── PIN MODAL ─────────────────────────────────────────── */
+    .pin-dots {
+      display:flex; justify-content:center; gap:16px; margin-bottom:6px;
+    }
+    .pin-dot {
+      width:16px; height:16px; border-radius:50%;
+      border:2px solid var(--border); background:transparent;
+      transition: all .15s;
+    }
+    .pin-dot.filled { background:var(--amber); border-color:var(--amber); }
+    .pin-dot.error  { background:var(--rust);  border-color:var(--rust); }
+    .pin-grid {
+      display:grid; grid-template-columns:repeat(3,72px);
+      gap:10px; justify-content:center; margin-top:20px;
+    }
+    .pin-key {
+      width:72px; height:72px; border-radius:50%;
+      border:1.5px solid var(--border); background:var(--white);
+      font-family:'Playfair Display',serif; font-size:24px; font-weight:600;
+      color:var(--dark); cursor:pointer;
+      display:flex; align-items:center; justify-content:center;
+      box-shadow: 0 2px 8px rgba(44,26,16,0.07);
+      transition: all .1s; user-select:none; -webkit-user-select:none;
+    }
+    .pin-key:active { background:var(--cream-dark); transform:scale(.93); }
+    .pin-del { font-size:20px; font-family:'DM Sans',sans-serif; }
+    @media (min-width:768px) {
+      .pin-grid { grid-template-columns:repeat(3,84px); gap:12px; }
+      .pin-key  { width:84px; height:84px; font-size:26px; }
+    }
+
     /* ── IPAD LANDSCAPE / WIDER ── */
     @media (min-width:1024px) {
       :root { --sidebar-w:260px; }
@@ -953,6 +984,41 @@
       <button class="sheet-close" id="supplierClose">✕</button>
     </div>
     <div class="sheet-body" id="supplierSheetBody"></div>
+  </div>
+</div>
+
+<!-- MODAL: PIN -->
+<div class="overlay" id="pinOverlay">
+  <div class="sheet" style="max-height:auto" onclick="event.stopPropagation()">
+    <div class="sheet-handle"></div>
+    <div class="sheet-hdr">
+      <h2 class="sheet-title">🔒 Weekly Orders</h2>
+      <button class="sheet-close" id="pinClose">✕</button>
+    </div>
+    <div class="sheet-body" style="text-align:center; padding-bottom:36px">
+      <p style="font-size:14px; color:var(--muted); margin-bottom:22px">Enter your PIN to access Weekly Orders</p>
+      <div class="pin-dots" id="pinDots">
+        <div class="pin-dot" id="pd0"></div>
+        <div class="pin-dot" id="pd1"></div>
+        <div class="pin-dot" id="pd2"></div>
+        <div class="pin-dot" id="pd3"></div>
+      </div>
+      <div id="pinError" style="color:var(--rust); font-size:13px; font-weight:600; height:20px; margin-top:10px;"></div>
+      <div class="pin-grid">
+        <button class="pin-key" data-v="1">1</button>
+        <button class="pin-key" data-v="2">2</button>
+        <button class="pin-key" data-v="3">3</button>
+        <button class="pin-key" data-v="4">4</button>
+        <button class="pin-key" data-v="5">5</button>
+        <button class="pin-key" data-v="6">6</button>
+        <button class="pin-key" data-v="7">7</button>
+        <button class="pin-key" data-v="8">8</button>
+        <button class="pin-key" data-v="9">9</button>
+        <div></div>
+        <button class="pin-key" data-v="0">0</button>
+        <button class="pin-key pin-del" data-v="del">⌫</button>
+      </div>
+    </div>
   </div>
 </div>
 
@@ -2124,7 +2190,8 @@ function rListModal() {
 
   // Weekly Orders click
   document.getElementById('weeklyOrdersRow').addEventListener('click', () => {
-    S.view = 'order'; save(); closeOverlay('listOverlay'); render();
+    closeOverlay('listOverlay');
+    openPinModal(() => { S.view = 'order'; save(); render(); });
   });
 
   body.querySelectorAll('[data-a="sw-list"]').forEach(b=>b.addEventListener('click',()=>{
@@ -2300,6 +2367,54 @@ function uploadSuppliers(event) {
   reader.readAsText(file);
   event.target.value = '';
 }
+
+// ═══════════════════════════════════════════════════════════
+// PIN MODAL
+// ═══════════════════════════════════════════════════════════
+const CORRECT_PIN = '1919';
+let _pinEntry = '';
+let _pinCallback = null;
+
+function openPinModal(onSuccess) {
+  _pinEntry = '';
+  _pinCallback = onSuccess;
+  updatePinDots();
+  document.getElementById('pinError').textContent = '';
+  openOverlay('pinOverlay');
+}
+
+function updatePinDots() {
+  for (let i = 0; i < 4; i++) {
+    const dot = document.getElementById('pd' + i);
+    dot.classList.toggle('filled', i < _pinEntry.length);
+    dot.classList.remove('error');
+  }
+}
+
+function pinShakeError() {
+  for (let i = 0; i < 4; i++) document.getElementById('pd' + i).classList.add('error');
+  document.getElementById('pinError').textContent = 'Incorrect PIN — try again.';
+  setTimeout(() => { _pinEntry = ''; updatePinDots(); document.getElementById('pinError').textContent = ''; }, 900);
+}
+
+function initPinModal() {
+  document.getElementById('pinClose').addEventListener('click', () => closeOverlay('pinOverlay'));
+  document.getElementById('pinOverlay').addEventListener('click', e => { if (e.target.id === 'pinOverlay') closeOverlay('pinOverlay'); });
+  document.querySelectorAll('.pin-key').forEach(btn => {
+    btn.addEventListener('click', () => {
+      const v = btn.dataset.v;
+      if (v === 'del') { _pinEntry = _pinEntry.slice(0, -1); updatePinDots(); }
+      else if (_pinEntry.length < 4) {
+        _pinEntry += v; updatePinDots();
+        if (_pinEntry.length === 4) {
+          if (_pinEntry === CORRECT_PIN) { closeOverlay('pinOverlay'); if (_pinCallback) _pinCallback(); }
+          else pinShakeError();
+        }
+      }
+    });
+  });
+}
+
 let toastTimer;
 function toast(msg) {
   const el = document.getElementById('toast');
@@ -2322,6 +2437,7 @@ function init() {
   // Quick add + autocomplete
   initAutocomplete();
   initQtyPicker();
+  initPinModal();
   document.getElementById('quickAddBtn').addEventListener('click', ()=>{
     const qi = document.getElementById('quickInput');
     const name = qi.value.trim();
@@ -2365,7 +2481,7 @@ function init() {
   });
 
   // Overlay backdrop tap to close
-  ['itemOverlay','listOverlay','storeOverlay','exportOverlay','orderItemOverlay','supplierOverlay'].forEach(id=>{
+  ['itemOverlay','listOverlay','storeOverlay','exportOverlay','orderItemOverlay','supplierOverlay','pinOverlay'].forEach(id=>{
     document.getElementById(id).addEventListener('click',e=>{if(e.target.id===id)closeOverlay(id);});
   });
 
