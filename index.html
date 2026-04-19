@@ -7,6 +7,7 @@
   <link rel="preconnect" href="https://fonts.googleapis.com" />
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
   <link href="https://fonts.googleapis.com/css2?family=Playfair+Display:ital,wght@0,400;0,600;0,700;1,400&family=DM+Sans:opsz,wght@9..40,300;9..40,400;9..40,500;9..40,600&display=swap" rel="stylesheet" />
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
   <style>
     :root {
       --cream:       #FAF6F0;
@@ -498,9 +499,10 @@
     /* ── WEEKLY ORDER VIEW ─────────────────────────────────── */
     .order-pad { padding:0 14px 24px; }
     .order-toolbar {
-      display:flex; gap:8px; padding:10px 14px 8px;
+      display:flex; gap:8px; padding:10px 14px 10px;
       border-bottom:1px solid var(--border);
-      position:sticky; top:var(--hdr-h); background:var(--cream); z-index:50;
+      background:var(--cream);
+      flex-wrap:wrap;
     }
     .order-toolbar .btn-primary { width:auto; height:40px; padding:0 18px; margin:0; font-size:14px; border-radius:20px; }
     .order-toolbar .btn-sec { width:auto; height:40px; padding:0 14px; margin:0; font-size:14px; border-radius:20px; }
@@ -558,7 +560,7 @@
     .order-empty { text-align:center; padding:60px 28px; }
 
     @media (min-width:768px) {
-      .order-toolbar { padding:14px 28px 12px; top:var(--hdr-h); }
+      .order-toolbar { padding:14px 28px 12px; }
       .order-pad { padding:0 28px 24px; }
       .supplier-hdr-name { font-size:18px; }
     }
@@ -1650,7 +1652,8 @@ function rOrderView() {
   let h = `<div class="order-toolbar">
     <button class="btn-primary" id="oAddItemBtn">+ Add Item</button>
     <button class="btn-sec" id="oManageSuppliersBtn">🏭 Suppliers</button>
-    <button class="btn-sec" id="oExportBtn">⬆️ Export</button>
+    <button class="btn-sec" id="oExportBtn">⬆️ Text</button>
+    <button class="btn-sec" id="oPdfBtn">📄 PDF</button>
   </div>
   <div class="order-pad">`;
 
@@ -1720,6 +1723,7 @@ function rOrderView() {
   document.getElementById('oAddItemBtn')?.addEventListener('click', () => openOrderItemModal());
   document.getElementById('oManageSuppliersBtn')?.addEventListener('click', () => { rSupplierModal(); openOverlay('supplierOverlay'); });
   document.getElementById('oExportBtn')?.addEventListener('click', exportOrder);
+  document.getElementById('oPdfBtn')?.addEventListener('click', exportOrderPDF);
   container.querySelectorAll('[data-sup]').forEach(b => b.addEventListener('click', () => openOrderItemModal(b.dataset.sup)));
   container.querySelectorAll('[data-oedit]').forEach(b => b.addEventListener('click', () => openOrderItemModal(null, b.dataset.oedit)));
 }
@@ -1836,6 +1840,191 @@ function exportOrder() {
 
   document.getElementById('exportTA').value = txt;
   openOverlay('exportOverlay');
+}
+
+function exportOrderPDF() {
+  const suppliers = S.suppliers || [];
+  const orderItems = S.orderItems || [];
+  if (!suppliers.filter(sup => (orderItems.filter(i => i.supplierId === sup.id)).length).length) {
+    toast('No items to export'); return;
+  }
+  if (!window.jspdf) { toast('PDF library loading, please try again in a moment'); return; }
+
+  const { jsPDF } = window.jspdf;
+  const doc = new jsPDF({ orientation: 'portrait', unit: 'mm', format: 'a4' });
+
+  const DARK  = [44, 26, 16];
+  const AMBER = [184, 115, 51];
+  const CREAM = [250, 246, 240];
+  const MUTED = [138, 112, 96];
+  const WHITE = [255, 255, 255];
+  const LITE  = [232, 222, 210];
+  const BORD  = [221, 213, 200];
+  const PW = 210, ML = 14, MR = 14, CW = PW - ML - MR;
+  const dateStr = new Date().toLocaleDateString('en-ZA', { weekday:'long', year:'numeric', month:'long', day:'numeric' });
+  let grand = 0;
+  let y = 50;
+
+  function addPageChrome() {
+    doc.setFillColor(...DARK);
+    doc.rect(0, 0, PW, 18, 'F');
+    doc.setFillColor(...AMBER);
+    doc.rect(PW - 6, 0, 6, 18, 'F');
+    doc.setFont('helvetica', 'bold');
+    doc.setFontSize(13);
+    doc.setTextColor(...WHITE);
+    doc.text('cart·ly', ML, 11.5);
+    doc.setFont('helvetica', 'normal');
+    doc.setFontSize(8.5);
+    doc.setTextColor(200, 175, 150);
+    doc.text('Weekly Order', ML + 21, 11.5);
+  }
+
+  function checkPage(need) {
+    if (y + need > 275) {
+      doc.addPage();
+      y = 24;
+      addPageChrome();
+    }
+  }
+
+  // Page 1 chrome + cover band
+  addPageChrome();
+  doc.setFillColor(...CREAM);
+  doc.rect(0, 18, PW, 28, 'F');
+  doc.setFillColor(...AMBER);
+  doc.rect(ML, 22, 1.5, 20, 'F');
+  doc.setFont('helvetica', 'bold');
+  doc.setFontSize(22);
+  doc.setTextColor(...DARK);
+  doc.text('Weekly Order', ML + 5, 34);
+  doc.setFont('helvetica', 'normal');
+  doc.setFontSize(9);
+  doc.setTextColor(...MUTED);
+  doc.text(dateStr, ML + 5, 41);
+
+  suppliers.forEach(sup => {
+    const items = orderItems.filter(i => i.supplierId === sup.id);
+    if (!items.length) return;
+    const supTotal = items.reduce((s, i) => s + i.price * i.quantity, 0);
+    grand += supTotal;
+
+    checkPage(14 + items.length * 10 + 10);
+
+    // Supplier header
+    doc.setFillColor(...DARK);
+    doc.roundedRect(ML, y, CW, 11, 1.5, 1.5, 'F');
+    doc.setFont('helvetica', 'bold');
+    doc.setFontSize(10);
+    doc.setTextColor(...WHITE);
+    doc.text(sup.name.toUpperCase(), ML + 4, y + 7.5);
+    doc.setFont('helvetica', 'normal');
+    doc.setFontSize(8);
+    doc.setTextColor(180, 155, 130);
+    doc.text(`${items.length} item${items.length !== 1 ? 's' : ''}`, PW - MR - 2, y + 7.5, { align: 'right' });
+    y += 11;
+
+    // Column headers
+    doc.setFillColor(60, 40, 25);
+    doc.rect(ML, y, CW, 7, 'F');
+    doc.setFont('helvetica', 'bold');
+    doc.setFontSize(7);
+    doc.setTextColor(180, 155, 130);
+    doc.text('ITEM', ML + 4, y + 5);
+    doc.text('SKU', ML + 95, y + 5);
+    doc.text('SIZE', ML + 118, y + 5);
+    doc.text('QTY', ML + 138, y + 5);
+    doc.text('UNIT PRICE', ML + 153, y + 5);
+    doc.text('TOTAL', PW - MR - 2, y + 5, { align: 'right' });
+    y += 7;
+
+    items.forEach((item, idx) => {
+      checkPage(10);
+      doc.setFillColor(...(idx % 2 === 0 ? WHITE : CREAM));
+      doc.rect(ML, y, CW, 10, 'F');
+      doc.setFillColor(...AMBER);
+      doc.rect(ML, y, 1.2, 10, 'F');
+
+      // Item name — truncate if too long
+      let name = item.name;
+      doc.setFont('helvetica', 'bold');
+      doc.setFontSize(8.5);
+      doc.setTextColor(...DARK);
+      while (doc.getTextWidth(name) > 88 && name.length > 6) name = name.slice(0, -1);
+      if (name !== item.name) name += '…';
+      doc.text(name, ML + 4, y + 6.8);
+
+      // SKU
+      if (item.sku) {
+        const sw = doc.setFontSize(7) || doc.getTextWidth(item.sku) + 4;
+        doc.setFontSize(7);
+        doc.setFillColor(...BORD);
+        const skuw = doc.getTextWidth(item.sku) + 4;
+        doc.roundedRect(ML + 95, y + 2.2, skuw, 5, 1, 1, 'F');
+        doc.setFont('helvetica', 'bold');
+        doc.setTextColor(...MUTED);
+        doc.text(item.sku, ML + 97, y + 6.2);
+      }
+
+      doc.setFont('helvetica', 'normal');
+      doc.setFontSize(8);
+      doc.setTextColor(...MUTED);
+      if (item.size) doc.text(item.size, ML + 118, y + 6.8);
+      doc.text(String(item.quantity), ML + 138, y + 6.8);
+      doc.text(R(item.price), ML + 153, y + 6.8);
+
+      doc.setFont('helvetica', 'bold');
+      doc.setFontSize(9);
+      doc.setTextColor(...DARK);
+      doc.text(R(item.price * item.quantity), PW - MR - 2, y + 6.8, { align: 'right' });
+      y += 10;
+    });
+
+    // Supplier total
+    checkPage(10);
+    doc.setFillColor(...LITE);
+    doc.rect(ML, y, CW, 9, 'F');
+    doc.setFont('helvetica', 'bold');
+    doc.setFontSize(8);
+    doc.setTextColor(...MUTED);
+    doc.text('SUPPLIER TOTAL', ML + 4, y + 6.2);
+    doc.setFontSize(10);
+    doc.setTextColor(...DARK);
+    doc.text(R(supTotal), PW - MR - 2, y + 6.5, { align: 'right' });
+    y += 9 + 8;
+  });
+
+  // Grand total
+  checkPage(18);
+  doc.setFillColor(...DARK);
+  doc.roundedRect(ML, y, CW, 16, 2, 2, 'F');
+  doc.setFillColor(...AMBER);
+  doc.roundedRect(ML, y, 2.5, 16, 1, 1, 'F');
+  doc.setFont('helvetica', 'normal');
+  doc.setFontSize(9);
+  doc.setTextColor(180, 155, 130);
+  doc.text('GRAND TOTAL', ML + 7, y + 7);
+  doc.setFont('helvetica', 'bold');
+  doc.setFontSize(15);
+  doc.setTextColor(...AMBER);
+  doc.text(R(grand), PW - MR - 2, y + 10.5, { align: 'right' });
+
+  // Footer on all pages
+  const pages = doc.getNumberOfPages();
+  for (let p = 1; p <= pages; p++) {
+    doc.setPage(p);
+    doc.setFillColor(...LITE);
+    doc.rect(0, 286, PW, 11, 'F');
+    doc.setFont('helvetica', 'normal');
+    doc.setFontSize(7.5);
+    doc.setTextColor(...MUTED);
+    doc.text('Generated by cartly', ML, 292.5);
+    doc.text(dateStr, PW / 2, 292.5, { align: 'center' });
+    doc.text(`Page ${p} of ${pages}`, PW - MR, 292.5, { align: 'right' });
+  }
+
+  doc.save(`weekly-order-${new Date().toISOString().slice(0,10)}.pdf`);
+  toast('PDF downloaded!');
 }
 function openOverlay(id)  { document.getElementById(id).classList.add('open'); }
 function closeOverlay(id) { document.getElementById(id).classList.remove('open'); }
