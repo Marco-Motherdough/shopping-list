@@ -704,6 +704,16 @@
       .toast { bottom:28px; }
     }
 
+    /* ── ORDER LIBRARY ────────────────────────────────────── */
+    .olib-item {
+      background:var(--white); display:flex; align-items:center; gap:10px;
+      padding:11px 14px; border-bottom:1px solid var(--cream-mid);
+    }
+    .olib-item:last-child { border-bottom:1px solid var(--border); border-radius:0 0 10px 10px; }
+    .olib-item-body { flex:1; min-width:0; }
+    .olib-item-name { font-size:14px; font-weight:500; color:var(--dark); white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+    .olib-item-meta { display:flex; gap:6px; flex-wrap:wrap; margin-top:3px; align-items:center; }
+
     /* ── PIN MODAL ─────────────────────────────────────────── */
     .pin-dots {
       display:flex; justify-content:center; gap:16px; margin-bottom:6px;
@@ -970,7 +980,43 @@
         </div>
       </div>
       <button class="btn-primary" id="saveOrderItemBtn">Save Item</button>
+      <label class="save-to-lib-row" style="margin-top:10px">
+        <input type="checkbox" id="oSaveToLib" />
+        <span class="save-to-lib-label">⭐ Save to order library for quick reuse</span>
+      </label>
       <button class="btn-sec btn-danger" id="deleteOrderItemBtn" style="display:none">Delete Item</button>
+    </div>
+  </div>
+</div>
+
+<!-- MODAL: Order Library -->
+<div class="overlay" id="orderLibOverlay">
+  <div class="sheet">
+    <div class="sheet-handle"></div>
+    <div class="sheet-hdr">
+      <h2 class="sheet-title">📚 Order Library</h2>
+      <button class="sheet-close" id="orderLibClose">✕</button>
+    </div>
+    <div class="sheet-body" id="orderLibBody"></div>
+  </div>
+</div>
+
+<!-- MODAL: Order Library Qty Picker -->
+<div class="overlay" id="oLibQtyOverlay">
+  <div class="sheet" onclick="event.stopPropagation()">
+    <div class="sheet-handle"></div>
+    <div class="sheet-hdr">
+      <h2 class="sheet-title" id="oLibQtyName">Item</h2>
+      <button class="sheet-close" id="oLibQtyClose">✕</button>
+    </div>
+    <div class="sheet-body" style="text-align:center; padding-bottom:36px">
+      <p style="font-size:13px; color:var(--muted); margin-bottom:18px">How many units do you need?</p>
+      <div class="qty-picker-row">
+        <button class="qty-btn" id="oLibQtyMinus">−</button>
+        <span class="qty-value" id="oLibQtyValue">1</span>
+        <button class="qty-btn" id="oLibQtyPlus">+</button>
+      </div>
+      <button class="btn-primary" id="oLibQtyConfirm" style="margin-top:22px">Add to Order</button>
     </div>
   </div>
 </div>
@@ -1055,8 +1101,9 @@ let S = {
   view: 'list',
   filterStore: 'all',
   savedItems: [],
-  suppliers: [],       // weekly order suppliers
-  orderItems: [],      // weekly order items
+  suppliers: [],
+  orderItems: [],
+  orderLibrary: [],  // saved order item templates per supplier
 };
 
 const uid = () => Date.now().toString(36) + Math.random().toString(36).slice(2,6);
@@ -1709,6 +1756,130 @@ function deleteOrderItem(id) {
   S.orderItems = (S.orderItems||[]).filter(i => i.id !== id); save(); rOrderView();
 }
 
+// ── ORDER LIBRARY ──────────────────────────────────────────
+function saveToOrderLibrary(d) {
+  if (!S.orderLibrary) S.orderLibrary = [];
+  const existing = S.orderLibrary.findIndex(x =>
+    x.name.toLowerCase() === d.name.toLowerCase() && x.supplierId === d.supplierId
+  );
+  const entry = { id: existing >= 0 ? S.orderLibrary[existing].id : uid(), supplierId: d.supplierId, name: d.name, sku: d.sku||'', size: d.size||'', price: d.price||0 };
+  if (existing >= 0) S.orderLibrary[existing] = entry;
+  else S.orderLibrary.unshift(entry);
+  save();
+  toast('Saved to order library ⭐');
+}
+
+function deleteFromOrderLibrary(id) {
+  S.orderLibrary = (S.orderLibrary||[]).filter(x => x.id !== id);
+  save(); rOrderLibrarySheet();
+}
+
+let _oLibQtyId = null, _oLibQtyVal = 1;
+
+function openOrderLibQtyPicker(libId) {
+  const entry = (S.orderLibrary||[]).find(x => x.id === libId);
+  if (!entry) return;
+  _oLibQtyId = libId;
+  _oLibQtyVal = 1;
+  document.getElementById('oLibQtyName').textContent = entry.name;
+  document.getElementById('oLibQtyValue').textContent = _oLibQtyVal;
+  openOverlay('oLibQtyOverlay');
+}
+
+function initOrderLibQtyPicker() {
+  document.getElementById('oLibQtyClose').addEventListener('click', () => closeOverlay('oLibQtyOverlay'));
+  document.getElementById('oLibQtyOverlay').addEventListener('click', e => { if (e.target.id === 'oLibQtyOverlay') closeOverlay('oLibQtyOverlay'); });
+  document.getElementById('oLibQtyMinus').addEventListener('click', () => {
+    if (_oLibQtyVal > 1) { _oLibQtyVal--; document.getElementById('oLibQtyValue').textContent = _oLibQtyVal; }
+  });
+  document.getElementById('oLibQtyPlus').addEventListener('click', () => {
+    _oLibQtyVal++; document.getElementById('oLibQtyValue').textContent = _oLibQtyVal;
+  });
+  // Hold to repeat
+  let ht, hi;
+  ['oLibQtyMinus','oLibQtyPlus'].forEach(btnId => {
+    const btn = document.getElementById(btnId);
+    const isPlus = btnId === 'oLibQtyPlus';
+    const step = () => { if (isPlus) _oLibQtyVal++; else if (_oLibQtyVal > 1) _oLibQtyVal--; document.getElementById('oLibQtyValue').textContent = _oLibQtyVal; };
+    const stop = () => { clearTimeout(ht); clearInterval(hi); };
+    btn.addEventListener('mousedown',  () => { ht = setTimeout(() => { hi = setInterval(step, 80); }, 400); });
+    btn.addEventListener('touchstart', () => { ht = setTimeout(() => { hi = setInterval(step, 80); }, 400); }, {passive:true});
+    btn.addEventListener('mouseup',    stop); btn.addEventListener('mouseleave', stop);
+    btn.addEventListener('touchend',   stop); btn.addEventListener('touchcancel', stop);
+  });
+  document.getElementById('oLibQtyConfirm').addEventListener('click', () => {
+    if (!_oLibQtyId) return;
+    const entry = (S.orderLibrary||[]).find(x => x.id === _oLibQtyId);
+    if (!entry) return;
+    addOrderItem({ ...entry, quantity: _oLibQtyVal });
+    toast(`Added ${_oLibQtyVal}× ${entry.name}`);
+    closeOverlay('oLibQtyOverlay');
+  });
+}
+
+function rOrderLibrarySheet() {
+  const body = document.getElementById('orderLibBody');
+  const lib = S.orderLibrary || [];
+  const suppliers = S.suppliers || [];
+
+  if (lib.length === 0) {
+    body.innerHTML = `<div class="empty" style="padding:40px 0">
+      <div class="empty-ico">⭐</div>
+      <h2 class="empty-ttl">Library is empty</h2>
+      <p class="empty-sub">When adding or editing an order item,<br>tick "Save to order library" to add it here.</p>
+    </div>`;
+    return;
+  }
+
+  let h = '';
+  // Group by supplier
+  const grouped = {};
+  lib.forEach(item => {
+    if (!grouped[item.supplierId]) grouped[item.supplierId] = [];
+    grouped[item.supplierId].push(item);
+  });
+  // Unmatched supplier fallback
+  const supOrder = [...suppliers.map(s => s.id), ...Object.keys(grouped).filter(id => !suppliers.find(s => s.id === id))];
+  const seen = new Set();
+  supOrder.forEach(supId => {
+    if (seen.has(supId) || !grouped[supId]) return;
+    seen.add(supId);
+    const sup = suppliers.find(s => s.id === supId);
+    const items = grouped[supId];
+    h += `<div style="margin-bottom:18px">
+      <div style="background:var(--dark);padding:9px 14px;border-radius:10px 10px 0 0;display:flex;align-items:center;justify-content:space-between">
+        <span style="font-family:'Playfair Display',serif;font-size:15px;font-weight:600;color:white">${esc(sup ? sup.name : 'Unknown Supplier')}</span>
+        <span style="font-size:11px;color:rgba(255,255,255,.5)">${items.length} item${items.length!==1?'s':''}</span>
+      </div>`;
+    items.forEach(item => {
+      h += `<div class="olib-item" data-olibid="${item.id}">
+        <div class="olib-item-body">
+          <div class="olib-item-name">${esc(item.name)}</div>
+          <div class="olib-item-meta">
+            ${item.sku ? `<span class="order-item-sku">${esc(item.sku)}</span>` : ''}
+            ${item.size ? `<span style="font-size:11px;color:var(--muted)">${esc(item.size)}</span>` : ''}
+            ${item.price > 0 ? `<span style="font-size:11px;color:var(--muted)">${R(item.price)}</span>` : ''}
+          </div>
+        </div>
+        <button class="lib-add-btn" data-olibid="${item.id}" title="Add to order">+</button>
+        <button class="lib-del-btn" data-olibdel="${item.id}" title="Remove">✕</button>
+      </div>`;
+    });
+    h += `</div>`;
+  });
+
+  body.innerHTML = h;
+  body.querySelectorAll('[data-olibid]').forEach(b => b.addEventListener('click', e => {
+    e.stopPropagation();
+    openOrderLibQtyPicker(b.dataset.olibid);
+  }));
+  body.querySelectorAll('[data-olibdel]').forEach(b => b.addEventListener('click', e => {
+    e.stopPropagation();
+    const entry = (S.orderLibrary||[]).find(x => x.id === b.dataset.olibdel);
+    if (entry && confirm(`Remove "${entry.name}" from library?`)) deleteFromOrderLibrary(b.dataset.olibdel);
+  }));
+}
+
 // ── ORDER VIEW RENDER ──────────────────────────────────────
 function rOrderView() {
   const container = document.getElementById('orderView');
@@ -1717,6 +1888,7 @@ function rOrderView() {
 
   let h = `<div class="order-toolbar">
     <button class="btn-primary" id="oAddItemBtn">+ Add Item</button>
+    <button class="btn-sec" id="oLibBtn">📚 Library</button>
     <button class="btn-sec" id="oManageSuppliersBtn">🏭 Suppliers</button>
     <button class="btn-sec" id="oExportBtn">⬆️ Text</button>
     <button class="btn-sec" id="oPdfBtn">📄 PDF</button>
@@ -1787,6 +1959,7 @@ function rOrderView() {
   container.innerHTML = h;
 
   document.getElementById('oAddItemBtn')?.addEventListener('click', () => openOrderItemModal());
+  document.getElementById('oLibBtn')?.addEventListener('click', () => { rOrderLibrarySheet(); openOverlay('orderLibOverlay'); });
   document.getElementById('oManageSuppliersBtn')?.addEventListener('click', () => { rSupplierModal(); openOverlay('supplierOverlay'); });
   document.getElementById('oExportBtn')?.addEventListener('click', exportOrder);
   document.getElementById('oPdfBtn')?.addEventListener('click', exportOrderPDF);
@@ -1828,6 +2001,12 @@ function openOrderItemModal(supplierId=null, editId=null) {
   }
   openOverlay('orderItemOverlay');
   setTimeout(() => document.getElementById('oName').focus(), 350);
+  // Pre-tick if already in library
+  const olib = S.orderLibrary || [];
+  const inLib = editId
+    ? olib.some(x => x.name.toLowerCase() === ((S.orderItems||[]).find(i=>i.id===editId)?.name||'').toLowerCase())
+    : false;
+  document.getElementById('oSaveToLib').checked = inLib;
 }
 function saveOrderItemModal() {
   const editId = document.getElementById('oEditId').value;
@@ -1843,6 +2022,9 @@ function saveOrderItemModal() {
     price:    parseFloat(document.getElementById('oPrice').value) || 0,
     quantity: parseInt(document.getElementById('oQty').value) || 1,
   };
+  if (document.getElementById('oSaveToLib').checked) {
+    saveToOrderLibrary(d);
+  }
   if (editId) { updateOrderItem(editId, d); toast('Item updated'); }
   else        { addOrderItem(d);            toast('Item added'); }
   closeOverlay('orderItemOverlay');
@@ -2438,6 +2620,8 @@ function init() {
   initAutocomplete();
   initQtyPicker();
   initPinModal();
+  initOrderLibQtyPicker();
+  document.getElementById('orderLibClose').addEventListener('click', () => closeOverlay('orderLibOverlay'));
   document.getElementById('quickAddBtn').addEventListener('click', ()=>{
     const qi = document.getElementById('quickInput');
     const name = qi.value.trim();
@@ -2481,7 +2665,7 @@ function init() {
   });
 
   // Overlay backdrop tap to close
-  ['itemOverlay','listOverlay','storeOverlay','exportOverlay','orderItemOverlay','supplierOverlay','pinOverlay'].forEach(id=>{
+  ['itemOverlay','listOverlay','storeOverlay','exportOverlay','orderItemOverlay','supplierOverlay','pinOverlay','orderLibOverlay','oLibQtyOverlay'].forEach(id=>{
     document.getElementById(id).addEventListener('click',e=>{if(e.target.id===id)closeOverlay(id);});
   });
 
