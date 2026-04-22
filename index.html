@@ -920,6 +920,49 @@
   </div>
 </div>
 
+<!-- MODAL: Edit Library Item -->
+<div class="overlay" id="libEditOverlay">
+  <div class="sheet" onclick="event.stopPropagation()">
+    <div class="sheet-handle"></div>
+    <div class="sheet-hdr">
+      <h2 class="sheet-title">Edit Library Item</h2>
+      <button class="sheet-close" id="libEditClose">✕</button>
+    </div>
+    <div class="sheet-body">
+      <input type="hidden" id="libEditId" />
+      <div class="f-group">
+        <label class="f-label">Item Name *</label>
+        <input class="f-input" id="libEditName" type="text" autocomplete="off" />
+      </div>
+      <div class="f-row">
+        <div class="f-group">
+          <label class="f-label">Category</label>
+          <select class="f-input" id="libEditCat"></select>
+        </div>
+        <div class="f-group">
+          <label class="f-label">Store</label>
+          <select class="f-input" id="libEditStore"></select>
+        </div>
+      </div>
+      <div class="f-row">
+        <div class="f-group">
+          <label class="f-label">Price (R)</label>
+          <input class="f-input" id="libEditPrice" type="number" min="0" step="0.01" placeholder="0.00" inputmode="decimal" />
+        </div>
+        <div class="f-group">
+          <label class="f-label">Quantity</label>
+          <input class="f-input" id="libEditQty" type="number" min="1" step="1" value="1" inputmode="numeric" />
+        </div>
+      </div>
+      <div class="f-group">
+        <label class="f-label">Notes (optional)</label>
+        <input class="f-input" id="libEditNotes" type="text" placeholder="e.g. Get the organic one" />
+      </div>
+      <button class="btn-primary" id="libEditSaveBtn">Save Changes</button>
+    </div>
+  </div>
+</div>
+
 <!-- MODAL: Quantity Picker -->
 <div class="overlay" id="qtyOverlay">
   <div class="sheet" style="max-height:auto">
@@ -1551,6 +1594,46 @@ function deleteFromLibrary(id) {
   save(); rLibraryView();
 }
 
+function openLibEditModal(id) {
+  const item = (S.savedItems||[]).find(s => s.id === id);
+  if (!item) return;
+  document.getElementById('libEditId').value = id;
+  document.getElementById('libEditName').value = item.name;
+  document.getElementById('libEditPrice').value = item.price || '';
+  document.getElementById('libEditQty').value = item.quantity || 1;
+  document.getElementById('libEditNotes').value = item.notes || '';
+  // Populate selects
+  document.getElementById('libEditCat').innerHTML = CATS.map(c =>
+    `<option value="${c}"${c === item.category ? ' selected' : ''}>${c}</option>`
+  ).join('');
+  document.getElementById('libEditStore').innerHTML =
+    `<option value="any"${item.store === 'any' ? ' selected' : ''}>Any Store</option>` +
+    S.stores.map(s => `<option value="${s.id}"${s.id === item.store ? ' selected' : ''}>${esc(s.name)}</option>`).join('');
+  openOverlay('libEditOverlay');
+  setTimeout(() => document.getElementById('libEditName').focus(), 350);
+}
+
+function saveLibEdit() {
+  const id   = document.getElementById('libEditId').value;
+  const name = document.getElementById('libEditName').value.trim();
+  if (!name) { document.getElementById('libEditName').focus(); return; }
+  const idx = (S.savedItems||[]).findIndex(s => s.id === id);
+  if (idx < 0) return;
+  S.savedItems[idx] = {
+    ...S.savedItems[idx],
+    name,
+    category: document.getElementById('libEditCat').value,
+    store:    document.getElementById('libEditStore').value,
+    price:    parseFloat(document.getElementById('libEditPrice').value) || 0,
+    quantity: parseInt(document.getElementById('libEditQty').value) || 1,
+    notes:    document.getElementById('libEditNotes').value.trim(),
+  };
+  save();
+  closeOverlay('libEditOverlay');
+  rLibraryView();
+  toast('Library item updated');
+}
+
 let _qtyLibId = null;
 let _qtyVal = 1;
 
@@ -1648,6 +1731,7 @@ function rLibraryView() {
         </div>
         <div class="lib-item-price">${item.price > 0 ? R(item.price) : '—'}</div>
         <button class="lib-add-btn" data-libid="${item.id}" title="Add to list">+</button>
+        <button class="lib-del-btn" data-libedit="${item.id}" title="Edit" style="color:var(--amber)">✎</button>
         <button class="lib-del-btn" data-libdel="${item.id}" title="Remove from library">✕</button>
       </div>`;
     });
@@ -1656,6 +1740,7 @@ function rLibraryView() {
   container.innerHTML = h;
 
   container.querySelectorAll('[data-libid]').forEach(b => b.addEventListener('click', () => addFromLibrary(b.dataset.libid)));
+  container.querySelectorAll('[data-libedit]').forEach(b => b.addEventListener('click', () => openLibEditModal(b.dataset.libedit)));
   container.querySelectorAll('[data-libdel]').forEach(b => b.addEventListener('click', () => {
     const item = (S.savedItems||[]).find(s => s.id === b.dataset.libdel);
     if (item && confirm(`Remove "${item.name}" from library?`)) deleteFromLibrary(b.dataset.libdel);
@@ -2665,9 +2750,14 @@ function init() {
   });
 
   // Overlay backdrop tap to close
-  ['itemOverlay','listOverlay','storeOverlay','exportOverlay','orderItemOverlay','supplierOverlay','pinOverlay','orderLibOverlay','oLibQtyOverlay'].forEach(id=>{
+  ['itemOverlay','listOverlay','storeOverlay','exportOverlay','orderItemOverlay','supplierOverlay','pinOverlay','orderLibOverlay','oLibQtyOverlay','libEditOverlay'].forEach(id=>{
     document.getElementById(id).addEventListener('click',e=>{if(e.target.id===id)closeOverlay(id);});
   });
+
+  // Library edit modal
+  document.getElementById('libEditClose').addEventListener('click', () => closeOverlay('libEditOverlay'));
+  document.getElementById('libEditSaveBtn').addEventListener('click', saveLibEdit);
+  document.getElementById('libEditName').addEventListener('keydown', e => { if (e.key === 'Enter') saveLibEdit(); });
 
   // Order item modal
   document.getElementById('orderItemClose').addEventListener('click', ()=>closeOverlay('orderItemOverlay'));
