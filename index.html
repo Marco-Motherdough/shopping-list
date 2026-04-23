@@ -527,6 +527,25 @@
       cursor:pointer;
     }
     .supplier-add-btn:active { background:rgba(255,255,255,.25); }
+
+    /* ── SUPPLIER DATE PICKER ─────────────────────────────── */
+    .sup-date-wrap {
+      position: relative; display:flex; align-items:center;
+      cursor: pointer;
+    }
+    .sup-date-label {
+      font-size: 12px; color: rgba(255,255,255,.75);
+      background: rgba(255,255,255,.12); border-radius: 8px;
+      padding: 5px 10px; white-space: nowrap;
+      cursor: pointer; user-select: none;
+      transition: background .15s;
+    }
+    .sup-date-label:hover, .sup-date-label:active { background: rgba(255,255,255,.22); }
+    .sup-date-label.has-date { color: var(--amber); font-weight: 600; }
+    .sup-date-input {
+      position: absolute; inset: 0; opacity: 0;
+      cursor: pointer; width: 100%; height: 100%;
+    }
     .order-item-row {
       background:var(--white); border-left:1px solid var(--border); border-right:1px solid var(--border);
       padding:11px 14px;
@@ -1153,7 +1172,8 @@ let S = {
   savedItems: [],
   suppliers: [],
   orderItems: [],
-  orderLibrary: [],  // saved order item templates per supplier
+  orderLibrary: [],
+  orderDates: {},    // supplierId -> 'YYYY-MM-DD'
 };
 
 const uid = () => Date.now().toString(36) + Math.random().toString(36).slice(2,6);
@@ -1848,7 +1868,27 @@ function deleteOrderItem(id) {
   S.orderItems = (S.orderItems||[]).filter(i => i.id !== id); save(); rOrderView();
 }
 
-// ── ORDER SEARCH AUTOCOMPLETE ─────────────────────────────
+function setSupplierDate(supId, value) {
+  if (!S.orderDates) S.orderDates = {};
+  S.orderDates[supId] = value;
+  save();
+  // Update label in place without full re-render
+  const lbl = document.getElementById('sdl-' + supId);
+  if (lbl) {
+    lbl.textContent = value ? formatOrderDate(value) : 'Set order date';
+    lbl.classList.toggle('has-date', !!value);
+  }
+}
+
+function formatOrderDate(dateStr) {
+  if (!dateStr) return '';
+  // Parse as local date to avoid timezone shifts
+  const [y, m, d] = dateStr.split('-').map(Number);
+  const date = new Date(y, m - 1, d);
+  const day  = date.toLocaleDateString('en-ZA', { weekday: 'short' });
+  const fmt  = date.toLocaleDateString('en-ZA', { day: 'numeric', month: 'short' });
+  return `${day} ${fmt}`;
+}
 let oAcTimer = null;
 
 function initOrderSearch() {
@@ -2063,11 +2103,20 @@ function rOrderView() {
       const supTotal = items.reduce((s, i) => s + i.price * i.quantity, 0);
       grandTotal += supTotal;
 
+      const supDate = (S.orderDates || {})[sup.id] || '';
+      const dateLabel = supDate ? formatOrderDate(supDate) : '';
+
       h += `<div class="supplier-block">
         <div class="supplier-hdr">
           <div class="supplier-hdr-left">
             <div class="supplier-hdr-name">${esc(sup.name)}</div>
             <div class="supplier-hdr-count">${items.length} item${items.length!==1?'s':''}</div>
+          </div>
+          <div class="sup-date-wrap">
+            <div class="sup-date-label" id="sdl-${sup.id}">${dateLabel || 'Set order date'}</div>
+            <input type="date" class="sup-date-input" id="sdi-${sup.id}"
+              value="${esc(supDate)}" data-supid="${sup.id}"
+              onchange="setSupplierDate(this.dataset.supid, this.value)">
           </div>
           <button class="supplier-add-btn" data-sup="${sup.id}">+ Add Item</button>
         </div>`;
@@ -2230,7 +2279,9 @@ function exportOrder() {
   suppliers.forEach(sup => {
     const items = orderItems.filter(i => i.supplierId === sup.id);
     if (!items.length) return;
-    txt += `${sup.name}:\n`;
+    const dateStr = (S.orderDates||{})[sup.id];
+    const datePart = dateStr ? ` — Order: ${formatOrderDate(dateStr)}` : '';
+    txt += `${sup.name}${datePart}:\n`;
     items.forEach(i => {
       const lt = i.price * i.quantity;
       const sku = i.sku ? ` [${i.sku}]` : '';
@@ -2315,6 +2366,9 @@ function exportOrderPDF() {
     const supTotal = items.reduce((s, i) => s + i.price * i.quantity, 0);
     grand += supTotal;
 
+    const supDateStr = (S.orderDates||{})[sup.id];
+    const supDateLabel = supDateStr ? formatOrderDate(supDateStr) : '';
+
     checkPage(14 + items.length * 10 + 10);
 
     // Supplier header
@@ -2327,7 +2381,11 @@ function exportOrderPDF() {
     doc.setFont('helvetica', 'normal');
     doc.setFontSize(8);
     doc.setTextColor(180, 155, 130);
-    doc.text(`${items.length} item${items.length !== 1 ? 's' : ''}`, PW - MR - 2, y + 7.5, { align: 'right' });
+    // Show date next to item count if set
+    const rightLabel = supDateLabel
+      ? `${supDateLabel}  ·  ${items.length} item${items.length !== 1 ? 's' : ''}`
+      : `${items.length} item${items.length !== 1 ? 's' : ''}`;
+    doc.text(rightLabel, PW - MR - 2, y + 7.5, { align: 'right' });
     y += 11;
 
     // Column headers
