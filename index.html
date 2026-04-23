@@ -506,6 +506,12 @@
     }
     .order-toolbar .btn-primary { width:auto; height:40px; padding:0 18px; margin:0; font-size:14px; border-radius:20px; }
     .order-toolbar .btn-sec { width:auto; height:40px; padding:0 14px; margin:0; font-size:14px; border-radius:20px; }
+    .order-search-wrap {
+      padding: 8px 14px 6px;
+      background: var(--cream);
+      border-bottom: 1px solid var(--border);
+    }
+    .order-search-wrap .quick-input { width: 100%; }
     .supplier-block { margin-top:18px; }
     .supplier-hdr {
       display:flex; align-items:center; justify-content:space-between;
@@ -562,6 +568,7 @@
     @media (min-width:768px) {
       .order-toolbar { padding:14px 28px 12px; }
       .order-pad { padding:0 28px 24px; }
+      .order-search-wrap { padding: 10px 28px 8px; }
       .supplier-hdr-name { font-size:18px; }
     }
     @media (min-width:1024px) {
@@ -1841,7 +1848,63 @@ function deleteOrderItem(id) {
   S.orderItems = (S.orderItems||[]).filter(i => i.id !== id); save(); rOrderView();
 }
 
-// ── ORDER LIBRARY ──────────────────────────────────────────
+// ── ORDER SEARCH AUTOCOMPLETE ─────────────────────────────
+let oAcTimer = null;
+
+function initOrderSearch() {
+  const input = document.getElementById('orderSearchInput');
+  const drop  = document.getElementById('orderSuggestionsDrop');
+  if (!input || !drop) return;
+
+  input.addEventListener('input', () => {
+    clearTimeout(oAcTimer);
+    oAcTimer = setTimeout(() => showOrderSuggestions(input.value.trim()), 80);
+  });
+  input.addEventListener('keydown', e => {
+    if (e.key === 'Escape') { hideOrderSuggestions(); input.blur(); }
+  });
+  document.addEventListener('click', e => {
+    if (!input.contains(e.target) && !drop.contains(e.target)) hideOrderSuggestions();
+  }, { once: false });
+}
+
+function showOrderSuggestions(query) {
+  const drop = document.getElementById('orderSuggestionsDrop');
+  if (!drop) return;
+  if (!query) { hideOrderSuggestions(); return; }
+
+  const lib = S.orderLibrary || [];
+  const matched = lib.filter(i => i.name.toLowerCase().includes(query.toLowerCase()));
+  if (!matched.length) { hideOrderSuggestions(); return; }
+
+  drop.innerHTML = matched.slice(0, 8).map(item => {
+    const sup = (S.suppliers||[]).find(s => s.id === item.supplierId);
+    const supName = sup ? sup.name : '';
+    const priceStr = item.price > 0 ? R(item.price) : '';
+    return `<div class="suggestion-item">
+      <div class="sug-name">${esc(item.name)}</div>
+      <div class="sug-meta">${supName ? esc(supName) : ''}${priceStr ? ' · ' + priceStr : ''}</div>
+      <button class="sug-add-btn" data-olibsearch="${item.id}">Add</button>
+    </div>`;
+  }).join('');
+
+  drop.querySelectorAll('[data-olibsearch]').forEach(btn => {
+    btn.addEventListener('click', e => {
+      e.stopPropagation();
+      const input = document.getElementById('orderSearchInput');
+      if (input) input.value = '';
+      hideOrderSuggestions();
+      openOrderLibQtyPicker(btn.dataset.olibsearch);
+    });
+  });
+
+  drop.classList.add('open');
+}
+
+function hideOrderSuggestions() {
+  const drop = document.getElementById('orderSuggestionsDrop');
+  if (drop) drop.classList.remove('open');
+}
 function saveToOrderLibrary(d) {
   if (!S.orderLibrary) S.orderLibrary = [];
   const existing = S.orderLibrary.findIndex(x =>
@@ -1978,6 +2041,13 @@ function rOrderView() {
     <button class="btn-sec" id="oExportBtn">⬆️ Text</button>
     <button class="btn-sec" id="oPdfBtn">📄 PDF</button>
   </div>
+  <div class="order-search-wrap">
+    <div class="autocomplete-wrap">
+      <input class="quick-input" id="orderSearchInput" type="text"
+        placeholder="Search order library to add item…" autocomplete="off" autocorrect="off" />
+      <div class="suggestions-drop" id="orderSuggestionsDrop"></div>
+    </div>
+  </div>
   <div class="order-pad">`;
 
   if (suppliers.length === 0) {
@@ -2050,6 +2120,9 @@ function rOrderView() {
   document.getElementById('oPdfBtn')?.addEventListener('click', exportOrderPDF);
   container.querySelectorAll('[data-sup]').forEach(b => b.addEventListener('click', () => openOrderItemModal(b.dataset.sup)));
   container.querySelectorAll('[data-oedit]').forEach(b => b.addEventListener('click', () => openOrderItemModal(null, b.dataset.oedit)));
+
+  // Order search bar autocomplete
+  initOrderSearch();
 }
 
 // ── ORDER ITEM MODAL ───────────────────────────────────────
