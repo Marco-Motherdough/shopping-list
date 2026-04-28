@@ -1386,9 +1386,11 @@ let S = {
   orderItems: [],
   orderLibrary: [],
   orderDates: {},
-  bakeryItems: [],         // general bakery items (no supplier)
-  bakerySuppliers: [],     // bakery suppliers
-  bakerySupplierItems: [], // items per bakery supplier
+  bakeryItems: [],             // working list (items added for current use)
+  bakeryItemLibrary: [],       // saved/reusable bakery items
+  bakerySuppliers: [],
+  bakerySupplierItems: [],     // working order items
+  bakerySupplierLibrary: [],   // saved supplier item templates
   bakeryTab: 'items',      // 'items' | 'suppliers'
 };
 
@@ -2051,53 +2053,60 @@ function rBakeryView() {
   const tab = S.bakeryTab || 'items';
 
   let h = `<div class="bakery-tabs">
-    <button class="bakery-tab${tab==='items'?' active':''}" onclick="S.bakeryTab='items';save();rBakeryView()">Items</button>
+    <button class="bakery-tab${tab==='items'?' active':''}" onclick="S.bakeryTab='items';save();rBakeryView()">Working List</button>
+    <button class="bakery-tab${tab==='itemlib'?' active':''}" onclick="S.bakeryTab='itemlib';save();rBakeryView()">Items Library</button>
     <button class="bakery-tab${tab==='suppliers'?' active':''}" onclick="S.bakeryTab='suppliers';save();rBakeryView()">Suppliers</button>
+    <button class="bakery-tab${tab==='suplib'?' active':''}" onclick="S.bakeryTab='suplib';save();rBakeryView()">Supplier Library</button>
   </div>`;
 
-  if (tab === 'items') h += rBakeryItemsTab();
-  else h += rBakerySuppliersTab();
+  if (tab === 'items')   h += rBakeryItemsTab();
+  else if (tab === 'itemlib')  h += rBakeryItemLibTab();
+  else if (tab === 'suppliers') h += rBakerySuppliersTab();
+  else if (tab === 'suplib')   h += rBakerySupLibTab();
 
   container.innerHTML = h;
   attachBakeryEvents();
 }
 
-// ── ITEMS TAB ─────────────────────────────────────────────
+// ── ITEMS WORKING LIST TAB ────────────────────────────────
 function rBakeryItemsTab() {
-  const items = S.bakeryItems || [];
+  const items    = S.bakeryItems || [];
   const unticked = items.filter(i => !i.ticked);
   const ticked   = items.filter(i =>  i.ticked);
   const total    = unticked.reduce((s,i) => s + (i.price||0)*(i.quantity||1), 0);
+  const libCount = (S.bakeryItemLibrary||[]).length;
 
   let h = `<div class="bakery-toolbar">
-    <button class="btn-primary" id="bkAddItemBtn">+ Add Item</button>
-    <button class="btn-sec" id="bkImportLibBtn">⬆ Import Library</button>
-    <input type="file" id="bkImportInput" accept=".json" style="display:none" onchange="importBkFromLibrary(event)">
-    ${ticked.length ? `<button class="btn-sec" id="bkClearTickedBtn">Clear ticked (${ticked.length})</button>` : ''}
+    <button class="btn-sec" id="bkClearTickedBtn2" ${!ticked.length?'style="display:none"':''}>Clear ticked (${ticked.length})</button>
   </div>
   <div class="order-search-wrap">
     <div class="autocomplete-wrap">
       <input class="quick-input" id="bkSearchInput" type="text"
-        placeholder="Search bakery items to add…" autocomplete="off" autocorrect="off" />
+        placeholder="Search library to add items…" autocomplete="off" autocorrect="off" />
       <div class="suggestions-drop" id="bkSuggestionsDrop"></div>
     </div>
   </div>
   <div class="bakery-pad" style="padding-top:10px">`;
 
-  if (items.length === 0) {
-    h += `<div class="empty" style="padding:50px 0">
+  if (items.length === 0 && libCount === 0) {
+    h += `<div class="empty" style="padding:40px 0">
       <div class="empty-ico">🥖</div>
-      <h2 class="empty-ttl">No items yet</h2>
-      <p class="empty-sub">Tap + Add Item to build your bakery list.</p>
+      <h2 class="empty-ttl">Nothing here yet</h2>
+      <p class="empty-sub">Go to <b>Items Library</b> to add your bakery items,<br>then search for them here to add to the working list.</p>
+    </div>`;
+  } else if (items.length === 0) {
+    h += `<div class="empty" style="padding:40px 0">
+      <div class="empty-ico">🔍</div>
+      <h2 class="empty-ttl">Search above to add items</h2>
+      <p class="empty-sub">Type an item name to find it from your library<br>and set the quantity you need.</p>
     </div>`;
   } else {
     unticked.forEach(item => { h += bkItemCard(item); });
     if (ticked.length) {
-      h += `<div style="padding:10px 0 4px; font-size:11px; font-weight:600; letter-spacing:.06em; text-transform:uppercase; color:var(--muted)">Used / Ticked</div>`;
+      h += `<div style="padding:10px 0 4px;font-size:11px;font-weight:600;letter-spacing:.06em;text-transform:uppercase;color:var(--muted)">Used / Ticked</div>`;
       ticked.forEach(item => { h += bkItemCard(item); });
     }
   }
-
   h += `</div>`;
   if (items.length > 0) {
     h += `<div class="bk-total-bar">
@@ -2105,6 +2114,42 @@ function rBakeryItemsTab() {
       <div class="bk-total-value">${R(total)}</div>
     </div>`;
   }
+  return h;
+}
+
+// ── ITEMS LIBRARY TAB ─────────────────────────────────────
+function rBakeryItemLibTab() {
+  const lib = S.bakeryItemLibrary || [];
+  let h = `<div class="bakery-toolbar">
+    <button class="btn-primary" id="bkAddLibItemBtn">+ Add Item</button>
+    <button class="btn-sec" id="bkImportLibBtn">⬆ Import JSON</button>
+    <input type="file" id="bkImportInput" accept=".json" style="display:none" onchange="importBkFromLibrary(event)">
+  </div>
+  <div class="bakery-pad" style="padding-top:10px">`;
+
+  if (!lib.length) {
+    h += `<div class="empty" style="padding:40px 0">
+      <div class="empty-ico">📚</div>
+      <h2 class="empty-ttl">Library is empty</h2>
+      <p class="empty-sub">Add items here to build your bakery library.<br>You can also import from a shopping library JSON.</p>
+    </div>`;
+  } else {
+    lib.forEach(item => {
+      const cc = item.category ? catColor(item.category) : null;
+      const lt = (item.price||0) * (item.quantity||1);
+      h += `<div class="bk-item">
+        ${cc ? `<div style="width:4px;height:36px;border-radius:2px;background:${cc};flex-shrink:0"></div>` : ''}
+        <div class="bk-item-body">
+          <div class="bk-item-name">${esc(item.name)}</div>
+          <div class="bk-item-meta">${item.category?esc(item.category):''}${item.notes?(item.category?' · ':'')+esc(item.notes):''}</div>
+        </div>
+        <div class="bk-item-price">${item.price>0?R(item.price):'—'}</div>
+        <button class="bk-item-btn" onclick="openBkLibItemModal('${item.id}')">✎</button>
+        <button class="bk-item-btn danger" onclick="deleteBkLibItem('${item.id}')">✕</button>
+      </div>`;
+    });
+  }
+  h += `</div>`;
   return h;
 }
 
@@ -2199,17 +2244,71 @@ function rBakerySuppliersTab() {
   return h;
 }
 
+// ── SUPPLIER LIBRARY TAB ─────────────────────────────────
+function rBakerySupLibTab() {
+  const lib       = S.bakerySupplierLibrary || [];
+  const suppliers = S.bakerySuppliers || [];
+  let h = `<div class="bakery-toolbar">
+    <button class="btn-primary" id="bkAddSupLibItemBtn">+ Add Item</button>
+    <button class="btn-sec" id="bkManageSuppliersBtn2">🏭 Suppliers</button>
+  </div>
+  <div class="bakery-pad" style="padding-top:10px">`;
+
+  if (!suppliers.length) {
+    h += `<div class="empty" style="padding:40px 0"><div class="empty-ico">🏭</div><h2 class="empty-ttl">No suppliers yet</h2><p class="empty-sub">Tap Suppliers to add your bakery suppliers first.</p></div>`;
+  } else if (!lib.length) {
+    h += `<div class="empty" style="padding:40px 0"><div class="empty-ico">📚</div><h2 class="empty-ttl">Library is empty</h2><p class="empty-sub">Add items here to build your supplier library.<br>Then search for them in the Suppliers tab.</p></div>`;
+  } else {
+    // Group by supplier
+    suppliers.forEach(sup => {
+      const items = lib.filter(i => i.supplierId === sup.id);
+      if (!items.length) return;
+      h += `<div class="supplier-block">
+        <div class="supplier-hdr">
+          <div class="supplier-hdr-left">
+            <div class="supplier-hdr-name">${esc(sup.name)}</div>
+            <div class="supplier-hdr-count">${items.length} item${items.length!==1?'s':''}</div>
+          </div>
+        </div>`;
+      items.forEach(item => {
+        h += `<div class="order-item-row">
+          <div class="order-item-body">
+            <div class="order-item-name">${esc(item.name)}</div>
+            <div class="order-item-meta">
+              ${item.sku  ? `<span class="order-item-sku">${esc(item.sku)}</span>` : ''}
+              ${item.size ? `<span class="order-item-size">${esc(item.size)}</span>` : ''}
+              ${item.price>0 ? `<span>${R(item.price)}</span>` : ''}
+            </div>
+          </div>
+          <button class="order-item-edit" onclick="openBkSupLibItemModal(null,'${item.id}')">✎</button>
+          <button class="order-item-edit" style="color:var(--rust)" onclick="deleteBkSupLibItem('${item.id}')">✕</button>
+        </div>`;
+      });
+      h += `<div style="height:4px"></div></div>`;
+    });
+  }
+  h += `</div>`;
+  return h;
+}
+
 // ── EVENT BINDING ──────────────────────────────────────────
 function attachBakeryEvents() {
-  document.getElementById('bkAddItemBtn')?.addEventListener('click', () => openBkItemModal());
-  document.getElementById('bkImportLibBtn')?.addEventListener('click', () => document.getElementById('bkImportInput').click());
-  document.getElementById('bkClearTickedBtn')?.addEventListener('click', () => {
+  // Working list tab
+  document.getElementById('bkClearTickedBtn2')?.addEventListener('click', () => {
     S.bakeryItems = (S.bakeryItems||[]).filter(i => !i.ticked); save(); rBakeryView();
     toast('Cleared ticked items');
   });
+  // Item library tab
+  document.getElementById('bkAddLibItemBtn')?.addEventListener('click', () => openBkItemModal());
+  document.getElementById('bkImportLibBtn')?.addEventListener('click',  () => document.getElementById('bkImportInput').click());
+  // Suppliers working tab
   document.getElementById('bkAddSupItemBtn')?.addEventListener('click', () => openBkSupItemModal());
   document.getElementById('bkManageSuppliersBtn')?.addEventListener('click', () => { rBkSuppliersModal(); openOverlay('bkSuppliersOverlay'); });
   document.querySelectorAll('[data-bksup]').forEach(b => b.addEventListener('click', () => openBkSupItemModal(b.dataset.bksup)));
+  // Supplier library tab
+  document.getElementById('bkAddSupLibItemBtn')?.addEventListener('click', () => openBkSupLibItemModal());
+  document.getElementById('bkManageSuppliersBtn2')?.addEventListener('click', () => { rBkSuppliersModal(); openOverlay('bkSuppliersOverlay'); });
+  // Search
   initBkSearch();
 }
 
@@ -2238,7 +2337,7 @@ function showBkSuggestions(query) {
   if (!drop) return;
   if (!query) { hideBkSuggestions(); return; }
 
-  const items = (S.bakeryItems||[]).filter(i =>
+  const items = (S.bakeryItemLibrary||[]).filter(i =>
     i.name.toLowerCase().includes(query.toLowerCase())
   );
   if (!items.length) { hideBkSuggestions(); return; }
@@ -2308,12 +2407,20 @@ function initBkQtyPicker() {
   });
   document.getElementById('bkQtyConfirm').addEventListener('click', () => {
     if (!_bkQtyId) return;
-    const item = (S.bakeryItems||[]).find(i => i.id === _bkQtyId);
-    if (!item) return;
-    item.quantity = _bkQtyVal;
-    item.ticked   = false;
+    const libItem = (S.bakeryItemLibrary||[]).find(i => i.id === _bkQtyId);
+    if (!libItem) return;
+    if (!S.bakeryItems) S.bakeryItems = [];
+    // Check if already in working list — update qty
+    const existing = S.bakeryItems.find(i => i.name.toLowerCase() === libItem.name.toLowerCase() && !i.ticked);
+    if (existing) {
+      existing.quantity = _bkQtyVal;
+    } else {
+      S.bakeryItems.push({ id:uid(), ticked:false, createdAt:Date.now(),
+        name:libItem.name, category:libItem.category||'', price:libItem.price||0,
+        quantity:_bkQtyVal, notes:libItem.notes||'' });
+    }
     save(); closeOverlay('bkQtyOverlay'); rBakeryView();
-    toast(`${item.name} ×${_bkQtyVal} added`);
+    toast(`${libItem.name} ×${_bkQtyVal} added to working list`);
   });
 }
 
@@ -2324,7 +2431,7 @@ function openBkItemModal(editId=null) {
   document.getElementById('bkItemSaveBtn').textContent = editId ? 'Save Changes' : 'Add Item';
   document.getElementById('bkItemDeleteBtn').style.display = editId ? '' : 'none';
   if (editId) {
-    const item = (S.bakeryItems||[]).find(i => i.id===editId);
+    const item = (S.bakeryItemLibrary||[]).find(i => i.id===editId);
     if (!item) return;
     document.getElementById('bkItemName').value     = item.name;
     populateBkItemCatSelect(item.category||'');
@@ -2353,14 +2460,14 @@ function saveBkItemModal() {
     quantity: parseInt(document.getElementById('bkItemQty').value)||1,
     notes:    document.getElementById('bkItemNotes').value.trim(),
   };
-  if (!S.bakeryItems) S.bakeryItems = [];
+  if (!S.bakeryItemLibrary) S.bakeryItemLibrary = [];
   if (editId) {
-    const idx = S.bakeryItems.findIndex(i => i.id===editId);
-    if (idx>=0) S.bakeryItems[idx] = { ...S.bakeryItems[idx], ...d };
+    const idx = S.bakeryItemLibrary.findIndex(i => i.id===editId);
+    if (idx>=0) S.bakeryItemLibrary[idx] = { ...S.bakeryItemLibrary[idx], ...d };
     toast('Item updated');
   } else {
-    S.bakeryItems.push({ id:uid(), ticked:false, createdAt:Date.now(), ...d });
-    toast('Item added');
+    S.bakeryItemLibrary.push({ id:uid(), createdAt:Date.now(), ...d });
+    toast('Item added to library');
   }
   save(); closeOverlay('bkItemOverlay'); rBakeryView();
 }
@@ -2374,6 +2481,14 @@ function deleteBkItem(id) {
   S.bakeryItems = (S.bakeryItems||[]).filter(i => i.id!==id); save(); rBakeryView();
 }
 
+function openBkLibItemModal(id) { openBkItemModal(id); }
+
+function deleteBkLibItem(id) {
+  if (!confirm('Remove this item from the library?')) return;
+  S.bakeryItemLibrary = (S.bakeryItemLibrary||[]).filter(i => i.id!==id);
+  save(); rBakeryView();
+}
+
 function importBkFromLibrary(event) {
   const file = event.target.files[0];
   if (!file) return;
@@ -2384,21 +2499,15 @@ function importBkFromLibrary(event) {
       if (data.type !== 'cartly-library' || !Array.isArray(data.items)) {
         toast('Invalid file — please use a cartly library export'); return;
       }
-      if (!S.bakeryItems) S.bakeryItems = [];
+      if (!S.bakeryItemLibrary) S.bakeryItemLibrary = [];
       let added = 0, skipped = 0;
       data.items.forEach(item => {
-        // Dedupe by name
-        const exists = S.bakeryItems.find(b => b.name.toLowerCase() === item.name.toLowerCase());
+        const exists = S.bakeryItemLibrary.find(b => b.name.toLowerCase() === item.name.toLowerCase());
         if (exists) { skipped++; return; }
-        S.bakeryItems.push({
-          id:       uid(),
-          ticked:   false,
-          createdAt: Date.now(),
-          name:     item.name,
-          category: item.category || '',
-          price:    item.price || 0,
-          quantity: 1,
-          notes:    '',
+        S.bakeryItemLibrary.push({
+          id: uid(), createdAt: Date.now(),
+          name: item.name, category: item.category||'',
+          price: item.price||0, quantity: 1, notes: '',
         });
         added++;
       });
@@ -2443,32 +2552,84 @@ function openBkSupItemModal(supplierId=null, editId=null) {
 }
 
 function saveBkSupItemModal() {
-  const editId = document.getElementById('bkSupItemEditId').value;
+  const rawId  = document.getElementById('bkSupItemEditId').value;
+  const isLib  = rawId.startsWith('LIB:');
+  const editId = isLib ? rawId.slice(4) : rawId;
   const name   = document.getElementById('bkSupItemName').value.trim();
   if (!name) { document.getElementById('bkSupItemName').focus(); return; }
   const supId  = document.getElementById('bkSupItemSupplier').value;
   if (!supId)  { toast('Add a supplier first'); return; }
   const d = {
-    supplierId: supId,
-    name,
+    supplierId: supId, name,
     sku:      document.getElementById('bkSupItemSku').value.trim(),
     size:     document.getElementById('bkSupItemSize').value.trim(),
     price:    parseFloat(document.getElementById('bkSupItemPrice').value)||0,
     quantity: parseInt(document.getElementById('bkSupItemQty').value)||1,
   };
-  if (!S.bakerySupplierItems) S.bakerySupplierItems = [];
-  if (editId) {
-    const idx = S.bakerySupplierItems.findIndex(i => i.id===editId);
-    if (idx>=0) S.bakerySupplierItems[idx] = { ...S.bakerySupplierItems[idx], ...d };
-    toast('Item updated');
+  if (isLib) {
+    if (!S.bakerySupplierLibrary) S.bakerySupplierLibrary = [];
+    if (editId) {
+      const idx = S.bakerySupplierLibrary.findIndex(i => i.id===editId);
+      if (idx>=0) S.bakerySupplierLibrary[idx] = { ...S.bakerySupplierLibrary[idx], ...d };
+      toast('Library item updated');
+    } else {
+      S.bakerySupplierLibrary.push({ id:uid(), createdAt:Date.now(), ...d });
+      toast('Added to supplier library');
+    }
   } else {
-    S.bakerySupplierItems.push({ id:uid(), createdAt:Date.now(), ...d });
-    toast('Item added');
+    if (!S.bakerySupplierItems) S.bakerySupplierItems = [];
+    if (editId) {
+      const idx = S.bakerySupplierItems.findIndex(i => i.id===editId);
+      if (idx>=0) S.bakerySupplierItems[idx] = { ...S.bakerySupplierItems[idx], ...d };
+      toast('Item updated');
+    } else {
+      S.bakerySupplierItems.push({ id:uid(), createdAt:Date.now(), ...d });
+      toast('Item added');
+    }
   }
   save(); closeOverlay('bkSupItemOverlay'); rBakeryView();
 }
 
 // ── BAKERY SUPPLIERS MODAL ─────────────────────────────────
+// ── SUPPLIER LIBRARY CRUD ─────────────────────────────────
+function openBkSupLibItemModal(supplierId=null, editId=null) {
+  // Reuse bkSupItemOverlay but target bakerySupplierLibrary
+  document.getElementById('bkSupItemEditId').value = 'LIB:' + (editId||'');
+  document.getElementById('bkSupItemTitle').textContent = editId ? 'Edit Library Item' : 'Add to Supplier Library';
+  document.getElementById('bkSupItemSaveBtn').textContent = editId ? 'Save Changes' : 'Add to Library';
+  document.getElementById('bkSupItemDeleteBtn').style.display = editId ? '' : 'none';
+
+  const sups = S.bakerySuppliers || [];
+  document.getElementById('bkSupItemSupplier').innerHTML = sups.length
+    ? sups.map(s => `<option value="${s.id}"${s.id===supplierId?' selected':''}>${esc(s.name)}</option>`).join('')
+    : `<option value="">— Add a supplier first —</option>`;
+
+  if (editId) {
+    const item = (S.bakerySupplierLibrary||[]).find(i => i.id===editId);
+    if (!item) return;
+    document.getElementById('bkSupItemSupplier').value = item.supplierId;
+    document.getElementById('bkSupItemName').value  = item.name;
+    document.getElementById('bkSupItemSku').value   = item.sku||'';
+    document.getElementById('bkSupItemSize').value  = item.size||'';
+    document.getElementById('bkSupItemPrice').value = item.price||'';
+    document.getElementById('bkSupItemQty').value   = item.quantity||1;
+  } else {
+    document.getElementById('bkSupItemName').value  = '';
+    document.getElementById('bkSupItemSku').value   = '';
+    document.getElementById('bkSupItemSize').value  = '';
+    document.getElementById('bkSupItemPrice').value = '';
+    document.getElementById('bkSupItemQty').value   = '1';
+  }
+  openOverlay('bkSupItemOverlay');
+  setTimeout(() => document.getElementById('bkSupItemName').focus(), 350);
+}
+
+function deleteBkSupLibItem(id) {
+  if (!confirm('Remove this item from the supplier library?')) return;
+  S.bakerySupplierLibrary = (S.bakerySupplierLibrary||[]).filter(i => i.id!==id);
+  save(); rBakeryView();
+}
+
 function rBkSuppliersModal() {
   const body = document.getElementById('bkSuppliersBody');
   const sups = S.bakerySuppliers || [];
@@ -3681,7 +3842,10 @@ function init() {
   document.getElementById('bkItemSaveBtn').addEventListener('click', saveBkItemModal);
   document.getElementById('bkItemDeleteBtn').addEventListener('click', () => {
     const id = document.getElementById('bkItemEditId').value;
-    if (id && confirm('Delete this item?')) { deleteBkItem(id); closeOverlay('bkItemOverlay'); }
+    if (id && confirm('Delete this item?')) {
+      S.bakeryItemLibrary = (S.bakeryItemLibrary||[]).filter(i => i.id!==id);
+      save(); closeOverlay('bkItemOverlay'); rBakeryView(); toast('Item deleted');
+    }
   });
   document.getElementById('bkItemName').addEventListener('keydown', e => { if (e.key==='Enter') saveBkItemModal(); });
 
@@ -3689,11 +3853,18 @@ function init() {
   document.getElementById('bkSupItemClose').addEventListener('click', () => closeOverlay('bkSupItemOverlay'));
   document.getElementById('bkSupItemSaveBtn').addEventListener('click', saveBkSupItemModal);
   document.getElementById('bkSupItemDeleteBtn').addEventListener('click', () => {
-    const id = document.getElementById('bkSupItemEditId').value;
-    if (id && confirm('Delete this item?')) {
+    const rawId = document.getElementById('bkSupItemEditId').value;
+    const isLib = rawId.startsWith('LIB:');
+    const id    = isLib ? rawId.slice(4) : rawId;
+    if (!id || !confirm('Delete this item?')) return;
+    if (isLib) {
+      S.bakerySupplierLibrary = (S.bakerySupplierLibrary||[]).filter(i => i.id!==id);
+      toast('Removed from library');
+    } else {
       S.bakerySupplierItems = (S.bakerySupplierItems||[]).filter(i => i.id!==id);
-      save(); closeOverlay('bkSupItemOverlay'); rBakeryView(); toast('Item deleted');
+      toast('Item deleted');
     }
+    save(); closeOverlay('bkSupItemOverlay'); rBakeryView();
   });
   document.getElementById('bkSupItemName').addEventListener('keydown', e => { if (e.key==='Enter') saveBkSupItemModal(); });
 
