@@ -2124,6 +2124,9 @@ function rBakeryItemLibTab() {
     <button class="btn-primary" id="bkAddLibItemBtn">+ Add Item</button>
     <button class="btn-sec" id="bkImportLibBtn">⬆ Import JSON</button>
     <input type="file" id="bkImportInput" accept=".json" style="display:none" onchange="importBkFromLibrary(event)">
+    <button class="btn-sec" id="bkExportItemLibBtn">⬇ Export</button>
+    <input type="file" id="bkImportItemLibInput" accept=".json" style="display:none" onchange="importBkItemLib(event)">
+    <button class="btn-sec" id="bkImportItemLibBtn">⬆ Import</button>
   </div>
   <div class="bakery-pad" style="padding-top:10px">`;
 
@@ -2251,6 +2254,9 @@ function rBakerySupLibTab() {
   let h = `<div class="bakery-toolbar">
     <button class="btn-primary" id="bkAddSupLibItemBtn">+ Add Item</button>
     <button class="btn-sec" id="bkManageSuppliersBtn2">🏭 Suppliers</button>
+    <button class="btn-sec" id="bkExportSupLibBtn">⬇ Export</button>
+    <input type="file" id="bkImportSupLibInput" accept=".json" style="display:none" onchange="importBkSupLib(event)">
+    <button class="btn-sec" id="bkImportSupLibBtn">⬆ Import</button>
   </div>
   <div class="bakery-pad" style="padding-top:10px">`;
 
@@ -2301,6 +2307,8 @@ function attachBakeryEvents() {
   // Item library tab
   document.getElementById('bkAddLibItemBtn')?.addEventListener('click', () => openBkItemModal());
   document.getElementById('bkImportLibBtn')?.addEventListener('click',  () => document.getElementById('bkImportInput').click());
+  document.getElementById('bkExportItemLibBtn')?.addEventListener('click', exportBkItemLib);
+  document.getElementById('bkImportItemLibBtn')?.addEventListener('click', () => document.getElementById('bkImportItemLibInput').click());
   // Suppliers working tab
   document.getElementById('bkAddSupItemBtn')?.addEventListener('click', () => openBkSupItemModal());
   document.getElementById('bkManageSuppliersBtn')?.addEventListener('click', () => { rBkSuppliersModal(); openOverlay('bkSuppliersOverlay'); });
@@ -2308,6 +2316,8 @@ function attachBakeryEvents() {
   // Supplier library tab
   document.getElementById('bkAddSupLibItemBtn')?.addEventListener('click', () => openBkSupLibItemModal());
   document.getElementById('bkManageSuppliersBtn2')?.addEventListener('click', () => { rBkSuppliersModal(); openOverlay('bkSuppliersOverlay'); });
+  document.getElementById('bkExportSupLibBtn')?.addEventListener('click', exportBkSupLib);
+  document.getElementById('bkImportSupLibBtn')?.addEventListener('click', () => document.getElementById('bkImportSupLibInput').click());
   // Search
   initBkSearch();
 }
@@ -2519,7 +2529,86 @@ function importBkFromLibrary(event) {
   event.target.value = '';
 }
 
-// ── SUPPLIER ITEMS CRUD ────────────────────────────────────
+// ── BAKERY ITEM LIBRARY EXPORT / IMPORT ───────────────────
+function exportBkItemLib() {
+  const lib = S.bakeryItemLibrary || [];
+  if (!lib.length) { toast('Item library is empty — nothing to export'); return; }
+  downloadJSON({ type:'cartly-bakery-items', version:1, exportedAt:new Date().toISOString(), items:lib },
+    'bakery-item-library.json');
+  toast(`Downloaded ${lib.length} item${lib.length!==1?'s':''}`);
+}
+
+function importBkItemLib(event) {
+  const file = event.target.files[0]; if (!file) return;
+  const reader = new FileReader();
+  reader.onload = e => {
+    try {
+      const data = JSON.parse(e.target.result);
+      if (data.type !== 'cartly-bakery-items' || !Array.isArray(data.items)) {
+        toast('Invalid file — use a bakery item library export'); return;
+      }
+      if (!S.bakeryItemLibrary) S.bakeryItemLibrary = [];
+      let added = 0, updated = 0;
+      data.items.forEach(item => {
+        const idx = S.bakeryItemLibrary.findIndex(b => b.name.toLowerCase() === item.name.toLowerCase());
+        if (idx >= 0) { S.bakeryItemLibrary[idx] = { ...S.bakeryItemLibrary[idx], ...item }; updated++; }
+        else { S.bakeryItemLibrary.push({ ...item, id: uid() }); added++; }
+      });
+      save(); rBakeryView();
+      toast(`${added} added, ${updated} updated`);
+    } catch(e) { toast('Could not read file'); }
+  };
+  reader.readAsText(file);
+  event.target.value = '';
+}
+
+// ── BAKERY SUPPLIER LIBRARY EXPORT / IMPORT ───────────────
+function exportBkSupLib() {
+  const lib       = S.bakerySupplierLibrary || [];
+  const suppliers = S.bakerySuppliers || [];
+  if (!lib.length) { toast('Supplier library is empty — nothing to export'); return; }
+  downloadJSON({ type:'cartly-bakery-suppliers', version:1, exportedAt:new Date().toISOString(),
+    suppliers, items:lib }, 'bakery-supplier-library.json');
+  toast(`Downloaded ${lib.length} item${lib.length!==1?'s':''} across ${suppliers.length} supplier${suppliers.length!==1?'s':''}`);
+}
+
+function importBkSupLib(event) {
+  const file = event.target.files[0]; if (!file) return;
+  const reader = new FileReader();
+  reader.onload = e => {
+    try {
+      const data = JSON.parse(e.target.result);
+      if (data.type !== 'cartly-bakery-suppliers' || !Array.isArray(data.items)) {
+        toast('Invalid file — use a bakery supplier library export'); return;
+      }
+      // Merge suppliers by name, build id map
+      if (!S.bakerySuppliers) S.bakerySuppliers = [];
+      if (!S.bakerySupplierLibrary) S.bakerySupplierLibrary = [];
+      const idMap = {};
+      (data.suppliers || []).forEach(sup => {
+        const ex = S.bakerySuppliers.find(s => s.name.toLowerCase() === sup.name.toLowerCase());
+        if (ex) { idMap[sup.id] = ex.id; }
+        else { const nid = uid(); S.bakerySuppliers.push({ id:nid, name:sup.name }); idMap[sup.id] = nid; }
+      });
+      // Merge library items
+      let added = 0, updated = 0;
+      data.items.forEach(item => {
+        const newSupId = idMap[item.supplierId];
+        if (!newSupId) return;
+        const idx = S.bakerySupplierLibrary.findIndex(b =>
+          b.name.toLowerCase() === item.name.toLowerCase() && b.supplierId === newSupId
+        );
+        const entry = { ...item, id: idx >= 0 ? S.bakerySupplierLibrary[idx].id : uid(), supplierId: newSupId };
+        if (idx >= 0) { S.bakerySupplierLibrary[idx] = entry; updated++; }
+        else { S.bakerySupplierLibrary.push(entry); added++; }
+      });
+      save(); rBakeryView();
+      toast(`${added} added, ${updated} updated`);
+    } catch(e) { toast('Could not read file'); }
+  };
+  reader.readAsText(file);
+  event.target.value = '';
+}
 function openBkSupItemModal(supplierId=null, editId=null) {
   document.getElementById('bkSupItemEditId').value = editId||'';
   document.getElementById('bkSupItemTitle').textContent = editId ? 'Edit Supplier Item' : 'Add Supplier Item';
