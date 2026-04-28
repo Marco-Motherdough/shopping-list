@@ -2053,7 +2053,7 @@ function rBakeryView() {
   const tab = S.bakeryTab || 'items';
 
   let h = `<div class="bakery-tabs">
-    <button class="bakery-tab${tab==='items'?' active':''}" onclick="S.bakeryTab='items';save();rBakeryView()">Working List</button>
+    <button class="bakery-tab${tab==='items'?' active':''}" onclick="S.bakeryTab='items';save();rBakeryView()">Item List</button>
     <button class="bakery-tab${tab==='itemlib'?' active':''}" onclick="S.bakeryTab='itemlib';save();rBakeryView()">Items Library</button>
     <button class="bakery-tab${tab==='suppliers'?' active':''}" onclick="S.bakeryTab='suppliers';save();rBakeryView()">Suppliers</button>
     <button class="bakery-tab${tab==='suplib'?' active':''}" onclick="S.bakeryTab='suplib';save();rBakeryView()">Supplier Library</button>
@@ -2373,10 +2373,10 @@ function hideBkSuggestions() {
 let _bkQtyId = null, _bkQtyVal = 1;
 
 function openBkQtyPicker(itemId) {
-  const item = (S.bakeryItems||[]).find(i => i.id === itemId);
+  const item = (S.bakeryItemLibrary||[]).find(i => i.id === itemId);
   if (!item) return;
   _bkQtyId  = itemId;
-  _bkQtyVal = item.quantity || 1;
+  _bkQtyVal = 1;
   document.getElementById('bkQtyName').textContent  = item.name;
   document.getElementById('bkQtyValue').textContent = _bkQtyVal;
   openOverlay('bkQtyOverlay');
