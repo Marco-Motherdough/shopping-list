@@ -1094,7 +1094,10 @@
       <input type="hidden" id="bkSupItemEditId" />
       <div class="f-group">
         <label class="f-label">Item Name *</label>
-        <input class="f-input" id="bkSupItemName" type="text" placeholder="e.g. Cake Flour 5kg" autocomplete="off" />
+        <div class="autocomplete-wrap">
+          <input class="f-input" id="bkSupItemName" type="text" placeholder="e.g. Cake Flour 5kg" autocomplete="off" />
+          <div class="suggestions-drop" id="bkSupItemDrop" style="position:absolute;top:100%;left:0;right:0;z-index:200"></div>
+        </div>
       </div>
       <div class="f-group">
         <label class="f-label">Supplier</label>
@@ -2379,6 +2382,79 @@ function hideBkSuggestions() {
   if (drop) drop.classList.remove('open');
 }
 
+// ── SUPPLIER ITEM MODAL AUTOCOMPLETE ──────────────────────
+let bkSupAcTimer = null;
+
+function initBkSupItemSearch() {
+  const input = document.getElementById('bkSupItemName');
+  const drop  = document.getElementById('bkSupItemDrop');
+  if (!input || !drop) return;
+
+  // Remove old listener by cloning
+  const fresh = input.cloneNode(true);
+  input.parentNode.replaceChild(fresh, input);
+
+  fresh.addEventListener('input', () => {
+    clearTimeout(bkSupAcTimer);
+    bkSupAcTimer = setTimeout(() => showBkSupSuggestions(fresh.value.trim()), 80);
+  });
+  fresh.addEventListener('keydown', e => {
+    if (e.key === 'Escape') { drop.classList.remove('open'); }
+    if (e.key === 'Enter') { drop.classList.remove('open'); }
+  });
+}
+
+function showBkSupSuggestions(query) {
+  const drop    = document.getElementById('bkSupItemDrop');
+  const supSel  = document.getElementById('bkSupItemSupplier');
+  if (!drop || !query) { if (drop) drop.classList.remove('open'); return; }
+
+  const supId = supSel?.value;
+  const lib   = S.bakerySupplierLibrary || [];
+
+  // Filter by supplier AND name query
+  const matches = lib.filter(i => {
+    const nameMatch = i.name.toLowerCase().includes(query.toLowerCase());
+    const supMatch  = !supId || i.supplierId === supId;
+    return nameMatch && supMatch;
+  });
+
+  if (!matches.length) { drop.classList.remove('open'); return; }
+
+  drop.innerHTML = matches.slice(0, 8).map(item =>
+    `<div class="suggestion-item" data-bksupsug="${item.id}" style="cursor:pointer">
+      <div class="sug-name">${esc(item.name)}</div>
+      <div class="sug-meta">${item.size ? esc(item.size) : ''}${item.sku ? (item.size?' · ':'')+esc(item.sku) : ''}${item.price>0?' · '+R(item.price):''}</div>
+    </div>`
+  ).join('');
+
+  drop.querySelectorAll('[data-bksupsug]').forEach(el => {
+    el.addEventListener('mousedown', e => {
+      e.preventDefault(); // prevent blur
+      const item = lib.find(i => i.id === el.dataset.bksupsug);
+      if (!item) return;
+      // Fill in all fields from the library item
+      const nameEl = document.getElementById('bkSupItemName');
+      if (nameEl) nameEl.value = item.name;
+      const skuEl  = document.getElementById('bkSupItemSku');
+      if (skuEl)  skuEl.value  = item.sku  || '';
+      const sizeEl = document.getElementById('bkSupItemSize');
+      if (sizeEl) sizeEl.value = item.size || '';
+      const priceEl = document.getElementById('bkSupItemPrice');
+      if (priceEl) priceEl.value = item.price || '';
+      const qtyEl   = document.getElementById('bkSupItemQty');
+      if (qtyEl)   qtyEl.value   = item.quantity || 1;
+      // Set supplier if not already set
+      const supSel  = document.getElementById('bkSupItemSupplier');
+      if (supSel && !supSel.value) supSel.value = item.supplierId;
+      drop.classList.remove('open');
+      toast(`Filled from library: ${item.name}`);
+    });
+  });
+
+  drop.classList.add('open');
+}
+
 // ── BAKERY QTY PICKER ──────────────────────────────────────
 let _bkQtyId = null, _bkQtyVal = 1;
 
@@ -2637,46 +2713,10 @@ function openBkSupItemModal(supplierId=null, editId=null) {
     document.getElementById('bkSupItemQty').value   = '1';
   }
   openOverlay('bkSupItemOverlay');
-  setTimeout(() => document.getElementById('bkSupItemName').focus(), 350);
-}
-
-function saveBkSupItemModal() {
-  const rawId  = document.getElementById('bkSupItemEditId').value;
-  const isLib  = rawId.startsWith('LIB:');
-  const editId = isLib ? rawId.slice(4) : rawId;
-  const name   = document.getElementById('bkSupItemName').value.trim();
-  if (!name) { document.getElementById('bkSupItemName').focus(); return; }
-  const supId  = document.getElementById('bkSupItemSupplier').value;
-  if (!supId)  { toast('Add a supplier first'); return; }
-  const d = {
-    supplierId: supId, name,
-    sku:      document.getElementById('bkSupItemSku').value.trim(),
-    size:     document.getElementById('bkSupItemSize').value.trim(),
-    price:    parseFloat(document.getElementById('bkSupItemPrice').value)||0,
-    quantity: parseInt(document.getElementById('bkSupItemQty').value)||1,
-  };
-  if (isLib) {
-    if (!S.bakerySupplierLibrary) S.bakerySupplierLibrary = [];
-    if (editId) {
-      const idx = S.bakerySupplierLibrary.findIndex(i => i.id===editId);
-      if (idx>=0) S.bakerySupplierLibrary[idx] = { ...S.bakerySupplierLibrary[idx], ...d };
-      toast('Library item updated');
-    } else {
-      S.bakerySupplierLibrary.push({ id:uid(), createdAt:Date.now(), ...d });
-      toast('Added to supplier library');
-    }
-  } else {
-    if (!S.bakerySupplierItems) S.bakerySupplierItems = [];
-    if (editId) {
-      const idx = S.bakerySupplierItems.findIndex(i => i.id===editId);
-      if (idx>=0) S.bakerySupplierItems[idx] = { ...S.bakerySupplierItems[idx], ...d };
-      toast('Item updated');
-    } else {
-      S.bakerySupplierItems.push({ id:uid(), createdAt:Date.now(), ...d });
-      toast('Item added');
-    }
-  }
-  save(); closeOverlay('bkSupItemOverlay'); rBakeryView();
+  setTimeout(() => {
+    document.getElementById('bkSupItemName').focus();
+    initBkSupItemSearch();
+  }, 350);
 }
 
 // ── BAKERY SUPPLIERS MODAL ─────────────────────────────────
@@ -2710,13 +2750,56 @@ function openBkSupLibItemModal(supplierId=null, editId=null) {
     document.getElementById('bkSupItemQty').value   = '1';
   }
   openOverlay('bkSupItemOverlay');
-  setTimeout(() => document.getElementById('bkSupItemName').focus(), 350);
+  setTimeout(() => {
+    document.getElementById('bkSupItemName').focus();
+    initBkSupItemSearch();
+  }, 350);
 }
 
 function deleteBkSupLibItem(id) {
   if (!confirm('Remove this item from the supplier library?')) return;
   S.bakerySupplierLibrary = (S.bakerySupplierLibrary||[]).filter(i => i.id!==id);
   save(); rBakeryView();
+}
+
+function saveBkSupItemModal() {
+  const rawId  = document.getElementById('bkSupItemEditId').value;
+  const isLib  = rawId.startsWith('LIB:');
+  const editId = isLib ? rawId.slice(4) : rawId;
+  const nameEl = document.getElementById('bkSupItemName');
+  const name   = nameEl ? nameEl.value.trim() : '';
+  if (!name) { if (nameEl) nameEl.focus(); return; }
+  const supId  = document.getElementById('bkSupItemSupplier').value;
+  if (!supId)  { toast('Add a supplier first'); return; }
+  const d = {
+    supplierId: supId, name,
+    sku:      document.getElementById('bkSupItemSku').value.trim(),
+    size:     document.getElementById('bkSupItemSize').value.trim(),
+    price:    parseFloat(document.getElementById('bkSupItemPrice').value)||0,
+    quantity: parseInt(document.getElementById('bkSupItemQty').value)||1,
+  };
+  if (isLib) {
+    if (!S.bakerySupplierLibrary) S.bakerySupplierLibrary = [];
+    if (editId) {
+      const idx = S.bakerySupplierLibrary.findIndex(i => i.id===editId);
+      if (idx>=0) S.bakerySupplierLibrary[idx] = { ...S.bakerySupplierLibrary[idx], ...d };
+      toast('Library item updated');
+    } else {
+      S.bakerySupplierLibrary.push({ id:uid(), createdAt:Date.now(), ...d });
+      toast('Added to supplier library');
+    }
+  } else {
+    if (!S.bakerySupplierItems) S.bakerySupplierItems = [];
+    if (editId) {
+      const idx = S.bakerySupplierItems.findIndex(i => i.id===editId);
+      if (idx>=0) S.bakerySupplierItems[idx] = { ...S.bakerySupplierItems[idx], ...d };
+      toast('Item updated');
+    } else {
+      S.bakerySupplierItems.push({ id:uid(), createdAt:Date.now(), ...d });
+      toast('Item added');
+    }
+  }
+  save(); closeOverlay('bkSupItemOverlay'); rBakeryView();
 }
 
 function rBkSuppliersModal() {
