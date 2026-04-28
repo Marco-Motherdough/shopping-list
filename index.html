@@ -1021,6 +1021,26 @@
   </div>
 </div>
 
+<!-- MODAL: Bakery Qty Picker -->
+<div class="overlay" id="bkQtyOverlay">
+  <div class="sheet" onclick="event.stopPropagation()">
+    <div class="sheet-handle"></div>
+    <div class="sheet-hdr">
+      <h2 class="sheet-title" id="bkQtyName">Item</h2>
+      <button class="sheet-close" id="bkQtyClose">✕</button>
+    </div>
+    <div class="sheet-body" style="text-align:center; padding-bottom:36px">
+      <p style="font-size:13px; color:var(--muted); margin-bottom:18px">How many do you need?</p>
+      <div class="qty-picker-row">
+        <button class="qty-btn" id="bkQtyMinus">−</button>
+        <span class="qty-value" id="bkQtyValue">1</span>
+        <button class="qty-btn" id="bkQtyPlus">+</button>
+      </div>
+      <button class="btn-primary" id="bkQtyConfirm" style="margin-top:22px">Add to List</button>
+    </div>
+  </div>
+</div>
+
 <!-- MODAL: Bakery Item (general) -->
 <div class="overlay" id="bkItemOverlay">
   <div class="sheet" onclick="event.stopPropagation()">
@@ -2055,6 +2075,13 @@ function rBakeryItemsTab() {
     <input type="file" id="bkImportInput" accept=".json" style="display:none" onchange="importBkFromLibrary(event)">
     ${ticked.length ? `<button class="btn-sec" id="bkClearTickedBtn">Clear ticked (${ticked.length})</button>` : ''}
   </div>
+  <div class="order-search-wrap">
+    <div class="autocomplete-wrap">
+      <input class="quick-input" id="bkSearchInput" type="text"
+        placeholder="Search bakery items to add…" autocomplete="off" autocorrect="off" />
+      <div class="suggestions-drop" id="bkSuggestionsDrop"></div>
+    </div>
+  </div>
   <div class="bakery-pad" style="padding-top:10px">`;
 
   if (items.length === 0) {
@@ -2183,6 +2210,111 @@ function attachBakeryEvents() {
   document.getElementById('bkAddSupItemBtn')?.addEventListener('click', () => openBkSupItemModal());
   document.getElementById('bkManageSuppliersBtn')?.addEventListener('click', () => { rBkSuppliersModal(); openOverlay('bkSuppliersOverlay'); });
   document.querySelectorAll('[data-bksup]').forEach(b => b.addEventListener('click', () => openBkSupItemModal(b.dataset.bksup)));
+  initBkSearch();
+}
+
+// ── BAKERY SEARCH ──────────────────────────────────────────
+let bkAcTimer = null;
+
+function initBkSearch() {
+  const input = document.getElementById('bkSearchInput');
+  const drop  = document.getElementById('bkSuggestionsDrop');
+  if (!input || !drop) return;
+
+  input.addEventListener('input', () => {
+    clearTimeout(bkAcTimer);
+    bkAcTimer = setTimeout(() => showBkSuggestions(input.value.trim()), 80);
+  });
+  input.addEventListener('keydown', e => {
+    if (e.key === 'Escape') { hideBkSuggestions(); input.blur(); }
+  });
+  document.addEventListener('click', e => {
+    if (!input.contains(e.target) && !drop.contains(e.target)) hideBkSuggestions();
+  });
+}
+
+function showBkSuggestions(query) {
+  const drop = document.getElementById('bkSuggestionsDrop');
+  if (!drop) return;
+  if (!query) { hideBkSuggestions(); return; }
+
+  const items = (S.bakeryItems||[]).filter(i =>
+    i.name.toLowerCase().includes(query.toLowerCase())
+  );
+  if (!items.length) { hideBkSuggestions(); return; }
+
+  drop.innerHTML = items.slice(0, 8).map(item => {
+    const cc = item.category ? catColor(item.category) : '#888';
+    return `<div class="suggestion-item">
+      <div class="sug-color" style="background:${cc}"></div>
+      <div class="sug-name">${esc(item.name)}</div>
+      <div class="sug-meta">${item.category ? esc(item.category) : ''}${item.price > 0 ? ' · ' + R(item.price) : ''}</div>
+      <button class="sug-add-btn" data-bksearch="${item.id}">Add</button>
+    </div>`;
+  }).join('');
+
+  drop.querySelectorAll('[data-bksearch]').forEach(btn => {
+    btn.addEventListener('click', e => {
+      e.stopPropagation();
+      const input = document.getElementById('bkSearchInput');
+      if (input) input.value = '';
+      hideBkSuggestions();
+      openBkQtyPicker(btn.dataset.bksearch);
+    });
+  });
+  drop.classList.add('open');
+}
+
+function hideBkSuggestions() {
+  const drop = document.getElementById('bkSuggestionsDrop');
+  if (drop) drop.classList.remove('open');
+}
+
+// ── BAKERY QTY PICKER ──────────────────────────────────────
+let _bkQtyId = null, _bkQtyVal = 1;
+
+function openBkQtyPicker(itemId) {
+  const item = (S.bakeryItems||[]).find(i => i.id === itemId);
+  if (!item) return;
+  _bkQtyId  = itemId;
+  _bkQtyVal = item.quantity || 1;
+  document.getElementById('bkQtyName').textContent  = item.name;
+  document.getElementById('bkQtyValue').textContent = _bkQtyVal;
+  openOverlay('bkQtyOverlay');
+}
+
+function initBkQtyPicker() {
+  document.getElementById('bkQtyClose').addEventListener('click', () => closeOverlay('bkQtyOverlay'));
+  document.getElementById('bkQtyOverlay').addEventListener('click', e => {
+    if (e.target.id === 'bkQtyOverlay') closeOverlay('bkQtyOverlay');
+  });
+  document.getElementById('bkQtyMinus').addEventListener('click', () => {
+    if (_bkQtyVal > 1) { _bkQtyVal--; document.getElementById('bkQtyValue').textContent = _bkQtyVal; }
+  });
+  document.getElementById('bkQtyPlus').addEventListener('click', () => {
+    _bkQtyVal++; document.getElementById('bkQtyValue').textContent = _bkQtyVal;
+  });
+  // Hold to repeat
+  let ht, hi;
+  ['bkQtyMinus','bkQtyPlus'].forEach(btnId => {
+    const btn = document.getElementById(btnId);
+    const isPlus = btnId === 'bkQtyPlus';
+    const step = () => { if (isPlus) _bkQtyVal++; else if (_bkQtyVal>1) _bkQtyVal--; document.getElementById('bkQtyValue').textContent = _bkQtyVal; };
+    const stop = () => { clearTimeout(ht); clearInterval(hi); };
+    btn.addEventListener('mousedown',  () => { ht = setTimeout(() => { hi = setInterval(step, 80); }, 400); });
+    btn.addEventListener('touchstart', () => { ht = setTimeout(() => { hi = setInterval(step, 80); }, 400); }, {passive:true});
+    btn.addEventListener('mouseup',    stop); btn.addEventListener('mouseleave', stop);
+    btn.addEventListener('touchend',   stop); btn.addEventListener('touchcancel', stop);
+  });
+  document.getElementById('bkQtyConfirm').addEventListener('click', () => {
+    if (!_bkQtyId) return;
+    const item = (S.bakeryItems||[]).find(i => i.id === _bkQtyId);
+    if (!item) return;
+    item.quantity = _bkQtyVal;
+    item.ticked   = false;
+    save(); closeOverlay('bkQtyOverlay'); rBakeryView();
+    toast(`${item.name} ×${_bkQtyVal} added`);
+  });
 }
 
 // ── ITEMS CRUD ─────────────────────────────────────────────
@@ -3537,11 +3669,12 @@ function init() {
   });
 
   // Overlay backdrop tap to close
-  ['itemOverlay','listOverlay','storeOverlay','exportOverlay','orderItemOverlay','supplierOverlay','pinOverlay','orderLibOverlay','oLibQtyOverlay','libEditOverlay','bkItemOverlay','bkSupItemOverlay','bkSuppliersOverlay','catMgmtOverlay'].forEach(id=>{
+  ['itemOverlay','listOverlay','storeOverlay','exportOverlay','orderItemOverlay','supplierOverlay','pinOverlay','orderLibOverlay','oLibQtyOverlay','libEditOverlay','bkItemOverlay','bkSupItemOverlay','bkSuppliersOverlay','catMgmtOverlay','bkQtyOverlay'].forEach(id=>{
     document.getElementById(id).addEventListener('click',e=>{if(e.target.id===id)closeOverlay(id);});
   });
 
   document.getElementById('catMgmtClose').addEventListener('click', () => closeOverlay('catMgmtOverlay'));
+  initBkQtyPicker();
 
   // Bakery item modal
   document.getElementById('bkItemClose').addEventListener('click', () => closeOverlay('bkItemOverlay'));
