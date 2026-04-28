@@ -2083,12 +2083,12 @@ function rBakeryItemsTab() {
 
 function bkItemCard(item) {
   const lt = (item.price||0) * (item.quantity||1);
-  const catColor = catColor(item.category) || null;
+  const itemCatColor = item.category ? catColor(item.category) : null;
   return `<div class="bk-item${item.ticked?' ticked':''}" id="bki-${item.id}">
     <div class="bk-item-check${item.ticked?' checked':''}" onclick="bkTickItem('${item.id}')">
       <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="white" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg>
     </div>
-    ${catColor ? `<div style="width:4px;height:36px;border-radius:2px;background:${catColor};flex-shrink:0"></div>` : ''}
+    ${itemCatColor ? `<div style="width:4px;height:36px;border-radius:2px;background:${itemCatColor};flex-shrink:0"></div>` : ''}
     <div class="bk-item-body">
       <div class="bk-item-name">${esc(item.name)}${item.quantity>1?`<span style="color:var(--muted);font-weight:400"> ×${item.quantity}</span>`:''}</div>
       <div class="bk-item-meta">${item.category ? esc(item.category) : ''}${item.notes ? (item.category?' · ':'')+esc(item.notes) : ''}</div>
