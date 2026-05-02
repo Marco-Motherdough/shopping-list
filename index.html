@@ -1015,6 +1015,16 @@
       <button class="sheet-close" id="exportClose">✕</button>
     </div>
     <div class="sheet-body">
+      <div style="display:flex; gap:0; margin-bottom:12px; border:1.5px solid var(--border); border-radius:10px; overflow:hidden;">
+        <button id="exportTabDetailed" onclick="switchExportTab('detailed')"
+          style="flex:1; padding:10px; border:none; background:var(--dark); color:white; font-family:'DM Sans',sans-serif; font-size:13px; font-weight:600; cursor:pointer;">
+          Detailed
+        </button>
+        <button id="exportTabSimple" onclick="switchExportTab('simple')"
+          style="flex:1; padding:10px; border:none; background:var(--white); color:var(--muted); font-family:'DM Sans',sans-serif; font-size:13px; font-weight:600; cursor:pointer;">
+          Simple List
+        </button>
+      </div>
       <textarea class="export-ta" id="exportTA" readonly></textarea>
       <button class="btn-primary" id="copyBtn">Copy to Clipboard</button>
     </div>
@@ -3756,13 +3766,41 @@ function rStoreModal() {
 }
 
 // ── EXPORT MODAL ───────────────────────────────────────────
+let _currentExportTab = 'detailed';
+
 function openExportModal() {
-  const l = activeList(); if (!l) return;
+  _currentExportTab = 'detailed';
+  document.getElementById('exportTA').value = buildDetailedExport();
+  switchExportTab('detailed');
+  openOverlay('exportOverlay');
+}
+
+function switchExportTab(tab) {
+  _currentExportTab = tab;
+  const detBtn = document.getElementById('exportTabDetailed');
+  const simBtn = document.getElementById('exportTabSimple');
+  if (detBtn) {
+    detBtn.style.background = tab === 'detailed' ? 'var(--dark)' : 'var(--white)';
+    detBtn.style.color      = tab === 'detailed' ? 'white'       : 'var(--muted)';
+  }
+  if (simBtn) {
+    simBtn.style.background = tab === 'simple' ? 'var(--dark)' : 'var(--white)';
+    simBtn.style.color      = tab === 'simple' ? 'white'       : 'var(--muted)';
+  }
+  document.getElementById('exportTA').value =
+    tab === 'detailed' ? buildDetailedExport() : buildSimpleExport();
+}
+
+function buildDetailedExport() {
+  const l = activeList(); if (!l) return '';
   const items = l.items.filter(i=>!i.ticked);
   let txt = `📋 ${l.name}\n📅 ${new Date().toLocaleDateString('en-ZA',{weekday:'long',year:'numeric',month:'long',day:'numeric'})}\n\n`;
-
   const grouped = {};
-  getCats().forEach(({name:cat, color:catColorVal}) => { const ci = items.filter(i=>i.category===cat); if (ci.length) grouped[cat]=ci; });
+  getCats().forEach(({name:cat}) => { const ci = items.filter(i=>i.category===cat); if (ci.length) grouped[cat]=ci; });
+  // uncategorised
+  const catted = new Set(Object.values(grouped).flat().map(i=>i.id));
+  const uncat  = items.filter(i => !catted.has(i.id));
+  if (uncat.length) grouped['Other'] = [...(grouped['Other']||[]), ...uncat.filter(i=>!grouped['Other']?.find(x=>x.id===i.id))];
   Object.entries(grouped).forEach(([cat,ci])=>{
     txt += `── ${cat} ──\n`;
     ci.forEach(i=>{
@@ -3775,11 +3813,19 @@ function openExportModal() {
     txt += '\n';
   });
   const tot = items.reduce((s,i)=>s+lineTotal(i),0);
-  const itemCount = items.length;
-  txt += `${'─'.repeat(32)}\n`;
-  txt += `Est. total (${itemCount} item${itemCount!==1?'s':''}): ${R(tot)}`;
-  document.getElementById('exportTA').value = txt;
-  openOverlay('exportOverlay');
+  txt += `${'─'.repeat(32)}\nEst. total (${items.length} item${items.length!==1?'s':''}): ${R(tot)}`;
+  return txt;
+}
+
+function buildSimpleExport() {
+  const l = activeList(); if (!l) return '';
+  const items = l.items.filter(i=>!i.ticked);
+  let txt = `📋 ${l.name}\n\n`;
+  items.forEach(i => {
+    const qty = i.quantity > 1 ? ` ×${i.quantity}` : '';
+    txt += `• ${i.name}${qty}\n`;
+  });
+  return txt;
 }
 
 // ═══════════════════════════════════════════════════════════
