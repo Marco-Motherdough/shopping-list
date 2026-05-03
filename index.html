@@ -1040,7 +1040,8 @@
       <button class="sheet-close" id="bkQtyClose">✕</button>
     </div>
     <div class="sheet-body" style="text-align:center; padding-bottom:36px">
-      <p style="font-size:13px; color:var(--muted); margin-bottom:18px">How many do you need?</p>
+      <p style="font-size:13px; color:var(--muted); margin-bottom:4px">How many do you need?</p>
+      <p id="bkQtyMeta" style="font-size:12px; color:var(--amber); font-weight:600; margin-bottom:14px; min-height:18px"></p>
       <div class="qty-picker-row">
         <button class="qty-btn" id="bkQtyMinus">−</button>
         <span class="qty-value" id="bkQtyValue">1</span>
@@ -2504,6 +2505,12 @@ function openBkQtyPicker(itemId, src) {
   _bkQtyVal = 1;
   document.getElementById('bkQtyName').textContent  = item.name;
   document.getElementById('bkQtyValue').textContent = _bkQtyVal;
+  // Show size/unit + price
+  const parts = [];
+  if (item.size)  parts.push(item.size);
+  if (item.price > 0) parts.push(R(item.price) + ' each');
+  const metaEl = document.getElementById('bkQtyMeta');
+  if (metaEl) metaEl.textContent = parts.join(' · ');
   openOverlay('bkQtyOverlay');
 }
 
