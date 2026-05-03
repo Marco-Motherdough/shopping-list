@@ -2360,18 +2360,44 @@ function showBkSuggestions(query) {
   if (!drop) return;
   if (!query) { hideBkSuggestions(); return; }
 
-  const items = (S.bakeryItemLibrary||[]).filter(i =>
-    i.name.toLowerCase().includes(query.toLowerCase())
-  );
-  if (!items.length) { hideBkSuggestions(); return; }
+  const q = query.toLowerCase();
 
-  drop.innerHTML = items.slice(0, 8).map(item => {
-    const cc = item.category ? catColor(item.category) : '#888';
+  // Search bakeryItemLibrary
+  const fromItemLib = (S.bakeryItemLibrary||[])
+    .filter(i => i.name.toLowerCase().includes(q))
+    .map(i => ({ ...i, _src: 'itemlib' }));
+
+  // Search bakerySupplierLibrary
+  const fromSupLib = (S.bakerySupplierLibrary||[])
+    .filter(i => i.name.toLowerCase().includes(q))
+    .map(i => ({ ...i, _src: 'suplib' }));
+
+  // Merge, dedupe by name (item lib takes priority), limit 10
+  const seen = new Set();
+  const all = [];
+  [...fromItemLib, ...fromSupLib].forEach(item => {
+    const key = item.name.toLowerCase();
+    if (!seen.has(key)) { seen.add(key); all.push(item); }
+  });
+
+  if (!all.length) { hideBkSuggestions(); return; }
+
+  drop.innerHTML = all.slice(0, 10).map(item => {
+    const cc = item.category ? catColor(item.category) : '#B87333';
+    const sup = item._src === 'suplib'
+      ? (S.bakerySuppliers||[]).find(s => s.id === item.supplierId)?.name || ''
+      : '';
+    const meta = [
+      item.category || '',
+      sup,
+      item.size || '',
+      item.price > 0 ? R(item.price) : ''
+    ].filter(Boolean).join(' · ');
     return `<div class="suggestion-item">
       <div class="sug-color" style="background:${cc}"></div>
       <div class="sug-name">${esc(item.name)}</div>
-      <div class="sug-meta">${item.category ? esc(item.category) : ''}${item.price > 0 ? ' · ' + R(item.price) : ''}</div>
-      <button class="sug-add-btn" data-bksearch="${item.id}">Add</button>
+      <div class="sug-meta">${esc(meta)}</div>
+      <button class="sug-add-btn" data-bksearch="${item.id}" data-bksrc="${item._src}">Add</button>
     </div>`;
   }).join('');
 
@@ -2381,7 +2407,7 @@ function showBkSuggestions(query) {
       const input = document.getElementById('bkSearchInput');
       if (input) input.value = '';
       hideBkSuggestions();
-      openBkQtyPicker(btn.dataset.bksearch);
+      openBkQtyPicker(btn.dataset.bksearch, btn.dataset.bksrc);
     });
   });
   drop.classList.add('open');
@@ -2466,12 +2492,15 @@ function showBkSupSuggestions(query) {
 }
 
 // ── BAKERY QTY PICKER ──────────────────────────────────────
-let _bkQtyId = null, _bkQtyVal = 1;
+let _bkQtyId = null, _bkQtyVal = 1, _bkQtySrc = 'itemlib';
 
-function openBkQtyPicker(itemId) {
-  const item = (S.bakeryItemLibrary||[]).find(i => i.id === itemId);
+function openBkQtyPicker(itemId, src) {
+  src = src || 'itemlib';
+  const lib = src === 'suplib' ? (S.bakerySupplierLibrary||[]) : (S.bakeryItemLibrary||[]);
+  const item = lib.find(i => i.id === itemId);
   if (!item) return;
   _bkQtyId  = itemId;
+  _bkQtySrc = src;
   _bkQtyVal = 1;
   document.getElementById('bkQtyName').textContent  = item.name;
   document.getElementById('bkQtyValue').textContent = _bkQtyVal;
@@ -2503,20 +2532,26 @@ function initBkQtyPicker() {
   });
   document.getElementById('bkQtyConfirm').addEventListener('click', () => {
     if (!_bkQtyId) return;
-    const libItem = (S.bakeryItemLibrary||[]).find(i => i.id === _bkQtyId);
+    const lib = _bkQtySrc === 'suplib' ? (S.bakerySupplierLibrary||[]) : (S.bakeryItemLibrary||[]);
+    const libItem = lib.find(i => i.id === _bkQtyId);
     if (!libItem) return;
     if (!S.bakeryItems) S.bakeryItems = [];
-    // Check if already in working list — update qty
+    // Update qty if already in list, else add fresh
     const existing = S.bakeryItems.find(i => i.name.toLowerCase() === libItem.name.toLowerCase() && !i.ticked);
     if (existing) {
       existing.quantity = _bkQtyVal;
     } else {
-      S.bakeryItems.push({ id:uid(), ticked:false, createdAt:Date.now(),
-        name:libItem.name, category:libItem.category||'', price:libItem.price||0,
-        quantity:_bkQtyVal, notes:libItem.notes||'' });
+      S.bakeryItems.push({
+        id: uid(), ticked: false, createdAt: Date.now(),
+        name: libItem.name,
+        category: libItem.category || '',
+        price: libItem.price || 0,
+        quantity: _bkQtyVal,
+        notes: libItem.notes || '',
+      });
     }
     save(); closeOverlay('bkQtyOverlay'); rBakeryView();
-    toast(`${libItem.name} ×${_bkQtyVal} added to working list`);
+    toast(`${libItem.name} ×${_bkQtyVal} added to list`);
   });
 }
 
