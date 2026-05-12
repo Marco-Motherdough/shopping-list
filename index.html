@@ -2265,12 +2265,15 @@ function rBakerySuppliersTab() {
 function rBakerySupLibTab() {
   const lib       = S.bakerySupplierLibrary || [];
   const suppliers = S.bakerySuppliers || [];
+  if (!_bkSupCollapsed) _bkSupCollapsed = {};
+
   let h = `<div class="bakery-toolbar">
     <button class="btn-primary" id="bkAddSupLibItemBtn">+ Add Item</button>
     <button class="btn-sec" id="bkManageSuppliersBtn2">🏭 Suppliers</button>
     <button class="btn-sec" id="bkExportSupLibBtn">⬇ Export</button>
     <input type="file" id="bkImportSupLibInput" accept=".json" style="display:none" onchange="importBkSupLib(event)">
     <button class="btn-sec" id="bkImportSupLibBtn">⬆ Import</button>
+    <button class="btn-sec" id="bkCollapseAllBtn">Collapse All</button>
   </div>
   <div class="bakery-pad" style="padding-top:10px">`;
 
@@ -2279,31 +2282,36 @@ function rBakerySupLibTab() {
   } else if (!lib.length) {
     h += `<div class="empty" style="padding:40px 0"><div class="empty-ico">📚</div><h2 class="empty-ttl">Library is empty</h2><p class="empty-sub">Add items here to build your supplier library.<br>Then search for them in the Suppliers tab.</p></div>`;
   } else {
-    // Group by supplier
     suppliers.forEach(sup => {
       const items = lib.filter(i => i.supplierId === sup.id);
       if (!items.length) return;
+      const collapsed = !!_bkSupCollapsed[sup.id];
       h += `<div class="supplier-block">
-        <div class="supplier-hdr">
+        <div class="supplier-hdr" style="cursor:pointer" onclick="toggleBkSupCollapse('${sup.id}')">
           <div class="supplier-hdr-left">
             <div class="supplier-hdr-name">${esc(sup.name)}</div>
             <div class="supplier-hdr-count">${items.length} item${items.length!==1?'s':''}</div>
           </div>
-        </div>`;
-      items.forEach(item => {
-        h += `<div class="order-item-row">
-          <div class="order-item-body">
-            <div class="order-item-name">${esc(item.name)}</div>
-            <div class="order-item-meta">
-              ${item.sku  ? `<span class="order-item-sku">${esc(item.sku)}</span>` : ''}
-              ${item.size ? `<span class="order-item-size">${esc(item.size)}</span>` : ''}
-              ${item.price>0 ? `<span>${R(item.price)}</span>` : ''}
-            </div>
+          <div style="color:rgba(255,255,255,.7);font-size:18px;padding-right:4px;user-select:none">
+            ${collapsed ? '▸' : '▾'}
           </div>
-          <button class="order-item-edit" onclick="openBkSupLibItemModal(null,'${item.id}')">✎</button>
-          <button class="order-item-edit" style="color:var(--rust)" onclick="deleteBkSupLibItem('${item.id}')">✕</button>
         </div>`;
-      });
+      if (!collapsed) {
+        items.forEach(item => {
+          h += `<div class="order-item-row">
+            <div class="order-item-body">
+              <div class="order-item-name">${esc(item.name)}</div>
+              <div class="order-item-meta">
+                ${item.sku  ? `<span class="order-item-sku">${esc(item.sku)}</span>` : ''}
+                ${item.size ? `<span class="order-item-size">${esc(item.size)}</span>` : ''}
+                ${item.price>0 ? `<span>${R(item.price)}</span>` : ''}
+              </div>
+            </div>
+            <button class="order-item-edit" onclick="openBkSupLibItemModal(null,'${item.id}')">✎</button>
+            <button class="order-item-edit" style="color:var(--rust)" onclick="deleteBkSupLibItem('${item.id}')">✕</button>
+          </div>`;
+        });
+      }
       h += `<div style="height:4px"></div></div>`;
     });
   }
@@ -2312,6 +2320,13 @@ function rBakerySupLibTab() {
 }
 
 // ── EVENT BINDING ──────────────────────────────────────────
+let _bkSupCollapsed = {};
+
+function toggleBkSupCollapse(supId) {
+  _bkSupCollapsed[supId] = !_bkSupCollapsed[supId];
+  rBakeryView();
+}
+
 function attachBakeryEvents() {
   // Working list tab
   document.getElementById('bkClearTickedBtn2')?.addEventListener('click', () => {
@@ -2332,6 +2347,13 @@ function attachBakeryEvents() {
   document.getElementById('bkManageSuppliersBtn2')?.addEventListener('click', () => { rBkSuppliersModal(); openOverlay('bkSuppliersOverlay'); });
   document.getElementById('bkExportSupLibBtn')?.addEventListener('click', exportBkSupLib);
   document.getElementById('bkImportSupLibBtn')?.addEventListener('click', () => document.getElementById('bkImportSupLibInput').click());
+  document.getElementById('bkCollapseAllBtn')?.addEventListener('click', () => {
+    const suppliers = S.bakerySuppliers || [];
+    const lib = S.bakerySupplierLibrary || [];
+    const allCollapsed = suppliers.every(s => _bkSupCollapsed[s.id] || !lib.find(i => i.supplierId === s.id));
+    suppliers.forEach(s => { _bkSupCollapsed[s.id] = !allCollapsed; });
+    rBakeryView();
+  });
   // Search
   initBkSearch();
 }
