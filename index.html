@@ -3012,7 +3012,7 @@ function showOrderSuggestions(query) {
   if (!query) { hideOrderSuggestions(); return; }
 
   const q = query.toLowerCase();
-  const matched = (S.orderItems || []).filter(i => i.name.toLowerCase().includes(q));
+  const matched = (S.orderLibrary || []).filter(i => i.name.toLowerCase().includes(q));
   if (!matched.length) { hideOrderSuggestions(); return; }
 
   drop.innerHTML = matched.slice(0, 10).map(item => {
@@ -3025,7 +3025,7 @@ function showOrderSuggestions(query) {
     return `<div class="suggestion-item">
       <div class="sug-name">${esc(item.name)}</div>
       <div class="sug-meta">${esc(meta)}</div>
-      <button class="sug-add-btn" data-olibsearch="${item.id}">Set Qty</button>
+      <button class="sug-add-btn" data-olibsearch="${item.id}">Add</button>
     </div>`;
   }).join('');
 
@@ -3066,10 +3066,10 @@ function deleteFromOrderLibrary(id) {
 let _oLibQtyId = null, _oLibQtyVal = 1;
 
 function openOrderLibQtyPicker(libId) {
-  const entry = (S.orderItems||[]).find(x => x.id === libId);
+  const entry = (S.orderLibrary||[]).find(x => x.id === libId);
   if (!entry) return;
   _oLibQtyId = libId;
-  _oLibQtyVal = entry.quantity || 1;
+  _oLibQtyVal = 1;
   document.getElementById('oLibQtyName').textContent = entry.name;
   document.getElementById('oLibQtyValue').textContent = _oLibQtyVal;
   openOverlay('oLibQtyOverlay');
@@ -3098,11 +3098,20 @@ function initOrderLibQtyPicker() {
   });
   document.getElementById('oLibQtyConfirm').addEventListener('click', () => {
     if (!_oLibQtyId) return;
-    const idx = (S.orderItems||[]).findIndex(x => x.id === _oLibQtyId);
-    if (idx < 0) return;
-    S.orderItems[idx].quantity = _oLibQtyVal;
+    const entry = (S.orderLibrary||[]).find(x => x.id === _oLibQtyId);
+    if (!entry) return;
+    // Update qty if already in this week's order, otherwise add fresh
+    const existing = (S.orderItems||[]).find(x =>
+      x.name.toLowerCase() === entry.name.toLowerCase() && x.supplierId === entry.supplierId
+    );
+    if (existing) {
+      existing.quantity = _oLibQtyVal;
+      toast(`${entry.name} updated to ×${_oLibQtyVal}`);
+    } else {
+      addOrderItem({ ...entry, quantity: _oLibQtyVal });
+      toast(`Added ${_oLibQtyVal}× ${entry.name}`);
+    }
     save(); rOrderView();
-    toast(`${S.orderItems[idx].name} set to ×${_oLibQtyVal}`);
     closeOverlay('oLibQtyOverlay');
   });
 }
@@ -3183,6 +3192,8 @@ function rOrderView() {
     <button class="btn-sec" id="oExportBtn">⬆️ Text</button>
     <button class="btn-sec" id="oPdfBtn">📄 PDF</button>
     <button class="btn-sec" id="oClearWeekBtn" style="color:var(--rust);border-color:var(--rust)">🗑 Clear Week</button>
+    <button class="btn-sec" id="oImportCatBtn">⬆ Import Catalogue</button>
+    <input type="file" id="oImportCatInput" accept=".json" style="display:none" onchange="uploadOrderCatalogue(event)">
   </div>
   <div class="order-search-wrap">
     <div class="autocomplete-wrap">
@@ -3270,6 +3281,9 @@ function rOrderView() {
   document.getElementById('oManageSuppliersBtn')?.addEventListener('click', () => { rSupplierModal(); openOverlay('supplierOverlay'); });
   document.getElementById('oExportBtn')?.addEventListener('click', exportOrder);
   document.getElementById('oPdfBtn')?.addEventListener('click', exportOrderPDF);
+  document.getElementById('oImportCatBtn')?.addEventListener('click', () => {
+    document.getElementById('oImportCatInput').click();
+  });
   document.getElementById('oClearWeekBtn')?.addEventListener('click', () => {
     if (!S.orderItems || !S.orderItems.length) { toast('Order is already empty'); return; }
     if (confirm('Clear all order items for this week? This cannot be undone.')) {
@@ -4041,6 +4055,45 @@ function uploadLibrary(event) {
       save(); rLibraryView();
       toast(`Library updated: ${added} added, ${updated} updated`);
     } catch(err) { toast('Could not read file — make sure it is a valid cartly export'); }
+  };
+  reader.readAsText(file);
+  event.target.value = '';
+}
+
+function uploadOrderCatalogue(event) {
+  const file = event.target.files[0]; if (!file) return;
+  const reader = new FileReader();
+  reader.onload = e => {
+    try {
+      const data = JSON.parse(e.target.result);
+      if (data.type !== 'cartly-order-catalogue' || !Array.isArray(data.items)) {
+        toast('Invalid file — use a Weekly Order catalogue export'); return;
+      }
+      if (!S.suppliers) S.suppliers = [];
+      if (!S.orderLibrary) S.orderLibrary = [];
+      // Merge suppliers by name, build id map
+      const idMap = {};
+      (data.suppliers || []).forEach(sup => {
+        const ex = S.suppliers.find(s => s.name.toLowerCase() === sup.name.toLowerCase());
+        if (ex) { idMap[sup.id] = ex.id; }
+        else { const nid = uid(); S.suppliers.push({ id: nid, name: sup.name }); idMap[sup.id] = nid; }
+      });
+      // Merge items into orderLibrary
+      let added = 0, updated = 0;
+      data.items.forEach(item => {
+        const newSupId = idMap[item.supplierId];
+        if (!newSupId) return;
+        const idx = S.orderLibrary.findIndex(x =>
+          x.name.toLowerCase() === item.name.toLowerCase() && x.supplierId === newSupId
+        );
+        const entry = { id: idx >= 0 ? S.orderLibrary[idx].id : uid(), supplierId: newSupId, name: item.name, sku: item.sku||'', size: item.size||'', price: item.price||0 };
+        if (idx >= 0) { S.orderLibrary[idx] = entry; updated++; }
+        else { S.orderLibrary.push(entry); added++; }
+      });
+      save();
+      if (S.view === 'order') rOrderView();
+      toast(`Catalogue updated: ${added} added, ${updated} updated`);
+    } catch(err) { toast('Could not read file'); }
   };
   reader.readAsText(file);
   event.target.value = '';
