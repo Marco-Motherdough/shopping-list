@@ -3182,6 +3182,7 @@ function rOrderView() {
     <button class="btn-sec" id="oManageSuppliersBtn">🏭 Suppliers</button>
     <button class="btn-sec" id="oExportBtn">⬆️ Text</button>
     <button class="btn-sec" id="oPdfBtn">📄 PDF</button>
+    <button class="btn-sec" id="oClearWeekBtn" style="color:var(--rust);border-color:var(--rust)">🗑 Clear Week</button>
   </div>
   <div class="order-search-wrap">
     <div class="autocomplete-wrap">
@@ -3269,6 +3270,14 @@ function rOrderView() {
   document.getElementById('oManageSuppliersBtn')?.addEventListener('click', () => { rSupplierModal(); openOverlay('supplierOverlay'); });
   document.getElementById('oExportBtn')?.addEventListener('click', exportOrder);
   document.getElementById('oPdfBtn')?.addEventListener('click', exportOrderPDF);
+  document.getElementById('oClearWeekBtn')?.addEventListener('click', () => {
+    if (!S.orderItems || !S.orderItems.length) { toast('Order is already empty'); return; }
+    if (confirm('Clear all order items for this week? This cannot be undone.')) {
+      S.orderItems = [];
+      save(); rOrderView();
+      toast('Week order cleared — ready for a new list');
+    }
+  });
   container.querySelectorAll('[data-sup]').forEach(b => b.addEventListener('click', () => openOrderItemModal(b.dataset.sup)));
   container.querySelectorAll('[data-oedit]').forEach(b => b.addEventListener('click', () => openOrderItemModal(null, b.dataset.oedit)));
 
