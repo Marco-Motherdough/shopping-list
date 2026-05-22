@@ -3011,18 +3011,21 @@ function showOrderSuggestions(query) {
   if (!drop) return;
   if (!query) { hideOrderSuggestions(); return; }
 
-  const lib = S.orderLibrary || [];
-  const matched = lib.filter(i => i.name.toLowerCase().includes(query.toLowerCase()));
+  const q = query.toLowerCase();
+  const matched = (S.orderItems || []).filter(i => i.name.toLowerCase().includes(q));
   if (!matched.length) { hideOrderSuggestions(); return; }
 
-  drop.innerHTML = matched.slice(0, 8).map(item => {
+  drop.innerHTML = matched.slice(0, 10).map(item => {
     const sup = (S.suppliers||[]).find(s => s.id === item.supplierId);
-    const supName = sup ? sup.name : '';
-    const priceStr = item.price > 0 ? R(item.price) : '';
+    const meta = [
+      sup ? sup.name : '',
+      item.size || '',
+      item.price > 0 ? R(item.price) : ''
+    ].filter(Boolean).join(' · ');
     return `<div class="suggestion-item">
       <div class="sug-name">${esc(item.name)}</div>
-      <div class="sug-meta">${supName ? esc(supName) : ''}${priceStr ? ' · ' + priceStr : ''}</div>
-      <button class="sug-add-btn" data-olibsearch="${item.id}">Add</button>
+      <div class="sug-meta">${esc(meta)}</div>
+      <button class="sug-add-btn" data-olibsearch="${item.id}">Set Qty</button>
     </div>`;
   }).join('');
 
@@ -3063,10 +3066,10 @@ function deleteFromOrderLibrary(id) {
 let _oLibQtyId = null, _oLibQtyVal = 1;
 
 function openOrderLibQtyPicker(libId) {
-  const entry = (S.orderLibrary||[]).find(x => x.id === libId);
+  const entry = (S.orderItems||[]).find(x => x.id === libId);
   if (!entry) return;
   _oLibQtyId = libId;
-  _oLibQtyVal = 1;
+  _oLibQtyVal = entry.quantity || 1;
   document.getElementById('oLibQtyName').textContent = entry.name;
   document.getElementById('oLibQtyValue').textContent = _oLibQtyVal;
   openOverlay('oLibQtyOverlay');
@@ -3095,10 +3098,11 @@ function initOrderLibQtyPicker() {
   });
   document.getElementById('oLibQtyConfirm').addEventListener('click', () => {
     if (!_oLibQtyId) return;
-    const entry = (S.orderLibrary||[]).find(x => x.id === _oLibQtyId);
-    if (!entry) return;
-    addOrderItem({ ...entry, quantity: _oLibQtyVal });
-    toast(`Added ${_oLibQtyVal}× ${entry.name}`);
+    const idx = (S.orderItems||[]).findIndex(x => x.id === _oLibQtyId);
+    if (idx < 0) return;
+    S.orderItems[idx].quantity = _oLibQtyVal;
+    save(); rOrderView();
+    toast(`${S.orderItems[idx].name} set to ×${_oLibQtyVal}`);
     closeOverlay('oLibQtyOverlay');
   });
 }
