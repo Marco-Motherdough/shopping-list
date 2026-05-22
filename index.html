@@ -868,6 +868,7 @@
   <div class="hdr-right">
     <button class="icon-btn" id="exportBtn" title="Export">⬆️</button>
     <button class="icon-btn" id="storesBtn" title="Manage stores">🏪</button>
+    <button class="icon-btn" id="catMgmtBtn" title="Manage categories">🏷️</button>
   </div>
 </header>
 
@@ -1564,6 +1565,7 @@ function render() {
   document.getElementById('filterBar').style.display = showBar ? '' : 'none';
   document.getElementById('exportBtn').style.display = isSpecial ? 'none' : '';
   document.getElementById('storesBtn').style.display = isSpecial ? 'none' : '';
+  document.getElementById('catMgmtBtn').style.display = isSpecial ? 'none' : '';
   document.querySelectorAll('.nav-btn').forEach(b => b.style.display = isSpecial ? 'none' : '');
   if (isSpecial) initTabletUI();
   if (S.view === 'list')    rListView();
@@ -4241,6 +4243,7 @@ function init() {
   document.getElementById('listSwitchBtn').addEventListener('click', openListModal);
   document.getElementById('exportBtn').addEventListener('click', openExportModal);
   document.getElementById('storesBtn').addEventListener('click', openStoreModal);
+  document.getElementById('catMgmtBtn').addEventListener('click', openCatMgmt);
 
   // Nav
   document.querySelectorAll('.nav-btn').forEach(b=>b.addEventListener('click',()=>{
