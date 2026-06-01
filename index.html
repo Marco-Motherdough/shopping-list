@@ -1393,6 +1393,10 @@ function catColor(name)      { return (getCats().find(c=>c.name===name)||{}).col
 // legacy compat
 function getCATS()           { return getCats().map(c=>c.name); }
 
+// ── GOOGLE SHEETS INTEGRATION ──────────────────────────────
+// Paste your deployed Apps Script URL here (one time, stays forever):
+const APPS_SCRIPT_URL = 'https://script.google.com/macros/s/AKfycbysjdi81mxulJ4rWUcch9uFfRpwhO3oqYPAI7bAbtlxjm8kQfqp6X1-wsRZNixbKsnAsg/exec';
+
 const DEF_STORES = ['Checkers','Pick n Pay','Woolworths','Spar'];
 const SK = 'shopList_v2';
 
@@ -1402,7 +1406,7 @@ const SK = 'shopList_v2';
 let S = {
   lists: [],
   stores: [],
-  categories: [],          // [{name, color}] — empty means use DEFAULT_CATS
+  categories: [],
   activeListId: null,
   view: 'list',
   filterStore: 'all',
@@ -1411,12 +1415,13 @@ let S = {
   orderItems: [],
   orderLibrary: [],
   orderDates: {},
-  bakeryItems: [],             // working list (items added for current use)
-  bakeryItemLibrary: [],       // saved/reusable bakery items
+  bakeryItems: [],
+  bakeryItemLibrary: [],
   bakerySuppliers: [],
-  bakerySupplierItems: [],     // working order items
-  bakerySupplierLibrary: [],   // saved supplier item templates
-  bakeryTab: 'items',      // 'items' | 'suppliers'
+  bakerySupplierItems: [],
+  bakerySupplierLibrary: [],
+  bakeryTab: 'items',
+  catalogueLastSync: '',   // timestamp of last successful Sheet sync
 };
 
 const uid = () => Date.now().toString(36) + Math.random().toString(36).slice(2,6);
@@ -1459,6 +1464,107 @@ function load() {
   S.activeListId = l.id;
   S.stores = DEF_STORES.map(n => ({ id: uid(), name: n }));
   save();
+}
+
+// ═══════════════════════════════════════════════════════════
+// CATALOGUE SYNC (Google Sheets → App)
+// ═══════════════════════════════════════════════════════════
+
+// Colour palette assigned to categories coming from the Sheet
+const CAT_COLOURS = ['#5A7A5C','#4A7EA5','#B85A3A','#B87333','#8B6914',
+                     '#3A9090','#6B5A8B','#3A7878','#8B4A6B','#888888',
+                     '#A05050','#506070','#708050','#907030','#507090'];
+
+async function syncCatalogue(silent = false) {
+  if (!APPS_SCRIPT_URL || APPS_SCRIPT_URL === 'YOUR_APPS_SCRIPT_URL_HERE') {
+    if (!silent) toast('Apps Script URL not set — open the HTML file and paste your URL');
+    return;
+  }
+
+  if (!silent) toast('Syncing catalogue…');
+
+  try {
+    const res  = await fetch(APPS_SCRIPT_URL + '?action=getCatalogue');
+    const data = await res.json();
+
+    if (data.error) throw new Error(data.error);
+
+    // ── Build stores (merge by name, keep existing IDs) ──
+    const newStores = [];
+    (data.stores || []).forEach(name => {
+      name = name.trim(); if (!name) return;
+      const existing = S.stores.find(s => s.name.toLowerCase() === name.toLowerCase());
+      newStores.push(existing || { id: uid(), name });
+    });
+    // Keep any stores that items on current lists still reference
+    const usedStoreIds = new Set((S.lists || []).flatMap(l => l.items.map(i => i.store)));
+    S.stores.forEach(s => {
+      if (usedStoreIds.has(s.id) && !newStores.find(ns => ns.id === s.id)) {
+        newStores.push(s);
+      }
+    });
+    S.stores = newStores;
+
+    // ── Build categories (assign colours deterministically) ──
+    const newCats = [];
+    (data.categories || []).forEach((name, i) => {
+      name = name.trim(); if (!name) return;
+      const existing = (S.categories || []).find(c => c.name.toLowerCase() === name.toLowerCase());
+      newCats.push(existing || { name, color: CAT_COLOURS[i % CAT_COLOURS.length] });
+    });
+    if (!newCats.find(c => c.name === 'Other')) {
+      newCats.push({ name: 'Other', color: '#888888' });
+    }
+    S.categories = newCats;
+
+    // ── Build store name → ID map for item matching ──
+    const storeIdMap = {};
+    S.stores.forEach(s => { storeIdMap[s.name.toLowerCase()] = s.id; });
+
+    // ── Upsert savedItems (the Library) from Sheet ──
+    // Rule: items with fromSheet:true are managed by the Sheet (replace/add freely)
+    //       items with fromSheet:false (manually added by staff after this update) are NEVER touched
+    if (!S.savedItems) S.savedItems = [];
+    let added = 0, updated = 0;
+
+    // Keep all manually-added items (fromSheet !== true)
+    const manualItems = S.savedItems.filter(s => s.fromSheet !== true);
+
+    // Build new Sheet-sourced list
+    const sheetItems = [];
+    (data.items || []).forEach(item => {
+      const name     = (item.name || '').trim(); if (!name) return;
+      const category = (item.category || 'Other').trim();
+      const storeId  = storeIdMap[(item.store || '').toLowerCase()] || 'any';
+      const price    = parseFloat(item.price) || 0;
+
+      // Preserve ID if this item already existed as a Sheet item
+      const existing = S.savedItems.find(s => s.fromSheet === true && s.name.toLowerCase() === name.toLowerCase());
+      const entry = {
+        id:        existing ? existing.id : uid(),
+        name, category,
+        store:     storeId,
+        price,
+        quantity:  1,
+        notes:     '',
+        fromSheet: true,   // mark as Sheet-managed
+      };
+      if (existing) updated++; else added++;
+      sheetItems.push(entry);
+    });
+
+    // Merge: Sheet items first, then manual items (manual items won't be overwritten)
+    S.savedItems = [...sheetItems, ...manualItems];
+
+    S.catalogueLastSync = new Date().toLocaleTimeString('en-ZA', { hour: '2-digit', minute: '2-digit' });
+    save();
+    render();
+    if (!silent) toast(`✅ Catalogue synced — ${added} new, ${updated} updated`);
+
+  } catch (err) {
+    console.error('Catalogue sync failed:', err);
+    if (!silent) toast(`Sync failed: ${err.message}`);
+  }
 }
 
 // ═══════════════════════════════════════════════════════════
@@ -1849,9 +1955,17 @@ function initSwipe(card) {
 // ── LIBRARY / SAVED ITEMS ─────────────────────────────────
 function saveToLibrary(d) {
   if (!S.savedItems) S.savedItems = [];
-  // Dedupe by name (case-insensitive) — update if exists
   const existing = S.savedItems.findIndex(s => s.name.toLowerCase() === d.name.toLowerCase());
-  const entry = { id: existing >= 0 ? S.savedItems[existing].id : uid(), name: d.name, category: d.category||'Other', store: d.store||'any', price: d.price||0, quantity: d.quantity||1, notes: d.notes||'' };
+  const entry = {
+    id:        existing >= 0 ? S.savedItems[existing].id : uid(),
+    name:      d.name,
+    category:  d.category || 'Other',
+    store:     d.store || 'any',
+    price:     d.price || 0,
+    quantity:  d.quantity || 1,
+    notes:     d.notes || '',
+    fromSheet: false,   // manually added — protected from sync overwrites
+  };
   if (existing >= 0) S.savedItems[existing] = entry;
   else S.savedItems.unshift(entry);
   save();
@@ -1965,24 +2079,27 @@ function rLibraryView() {
   const query = (document.getElementById('libSearch')?.value || '').toLowerCase();
   const filtered = query ? items.filter(i => i.name.toLowerCase().includes(query) || i.category.toLowerCase().includes(query)) : items;
 
+  const syncLine = S.catalogueLastSync
+    ? `<span style="font-size:12px;color:var(--sage)">✅ Last synced ${S.catalogueLastSync}</span>`
+    : `<span style="font-size:12px;color:var(--muted)">Not yet synced</span>`;
+
   let h = `<div class="lib-pad">
-    <h2>Item Library</h2>
-    <p class="lib-sub">Save items here to quickly add them to any list.</p>
+    <h2>Item Catalogue</h2>
+    <p class="lib-sub">Items loaded from Google Sheets. Tap to add to your list.</p>
     <div class="lib-transfer-row">
-      <button class="lib-transfer-btn primary" onclick="downloadLibrary()">⬇ Download Library</button>
-      <button class="lib-transfer-btn" onclick="document.getElementById('libUploadInput').click()">⬆ Upload Library</button>
-      <input type="file" id="libUploadInput" accept=".json" style="display:none" onchange="uploadLibrary(event)">
+      <button class="lib-transfer-btn primary" id="libSyncBtn">🔄 Sync Catalogue</button>
+      ${syncLine}
     </div>
     <div class="lib-search-wrap">
       <span class="lib-search-ico">🔍</span>
-      <input class="lib-search" id="libSearch" type="text" placeholder="Search saved items…" autocomplete="off" value="${esc(query)}" oninput="rLibraryView()" />
+      <input class="lib-search" id="libSearch" type="text" placeholder="Search catalogue…" autocomplete="off" value="${esc(query)}" oninput="rLibraryView()" />
     </div>`;
 
   if (items.length === 0) {
     h += `<div class="empty" style="padding:40px 0">
-      <div class="empty-ico">⭐</div>
-      <h2 class="empty-ttl">Library is empty</h2>
-      <p class="empty-sub">When adding or editing an item,<br>tick "Save to library" to add it here.</p>
+      <div class="empty-ico">📋</div>
+      <h2 class="empty-ttl">Catalogue is empty</h2>
+      <p class="empty-sub">Tap <strong>🔄 Sync Catalogue</strong> above<br>to load items from Google Sheets.</p>
     </div>`;
   } else if (filtered.length === 0) {
     h += `<div class="empty" style="padding:40px 0"><div class="empty-ico">🔍</div><p class="empty-sub">No items match "${esc(query)}"</p></div>`;
@@ -1998,20 +2115,16 @@ function rLibraryView() {
         </div>
         <div class="lib-item-price">${item.price > 0 ? R(item.price) : '—'}</div>
         <button class="lib-add-btn" data-libid="${item.id}" title="Add to list">+</button>
-        <button class="lib-del-btn" data-libedit="${item.id}" title="Edit" style="color:var(--amber)">✎</button>
-        <button class="lib-del-btn" data-libdel="${item.id}" title="Remove from library">✕</button>
       </div>`;
     });
   }
   h += `</div>`;
   container.innerHTML = h;
 
+  // Wire sync button
+  container.querySelector('#libSyncBtn')?.addEventListener('click', () => syncCatalogue(false));
+
   container.querySelectorAll('[data-libid]').forEach(b => b.addEventListener('click', () => addFromLibrary(b.dataset.libid)));
-  container.querySelectorAll('[data-libedit]').forEach(b => b.addEventListener('click', () => openLibEditModal(b.dataset.libedit)));
-  container.querySelectorAll('[data-libdel]').forEach(b => b.addEventListener('click', () => {
-    const item = (S.savedItems||[]).find(s => s.id === b.dataset.libdel);
-    if (item && confirm(`Remove "${item.name}" from library?`)) deleteFromLibrary(b.dataset.libdel);
-  }));
 }
 
 // ── AUTOCOMPLETE ───────────────────────────────────────────
@@ -4342,6 +4455,11 @@ load();
 init();
 initTabletUI();
 render();
+
+// Auto-sync catalogue from Google Sheets on every open (silent)
+if (APPS_SCRIPT_URL && APPS_SCRIPT_URL !== 'YOUR_APPS_SCRIPT_URL_HERE') {
+  setTimeout(() => syncCatalogue(true), 600);
+}
 </script>
 </body>
 </html>
