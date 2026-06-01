@@ -399,17 +399,20 @@
     .suggestions-drop.open { display:block; }
     .suggestion-item {
       display:flex; align-items:center; gap:10px;
-      padding:11px 14px; cursor:pointer; border-bottom:1px solid var(--cream-mid);
+      padding:10px 14px; cursor:pointer; border-bottom:1px solid var(--cream-mid);
       transition: background .12s;
     }
     .suggestion-item:last-child { border-bottom:none; }
     .suggestion-item:active { background: var(--cream-mid); }
-    .sug-color { width:8px; height:8px; border-radius:50%; flex-shrink:0; }
-    .sug-name { flex:1; font-size:15px; font-weight:500; min-width:0; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
-    .sug-meta { font-size:12px; color:var(--muted); flex-shrink:0; }
+    .sug-color { width:8px; height:8px; border-radius:50%; flex-shrink:0; margin-top:4px; align-self:flex-start; }
+    .sug-body { flex:1; min-width:0; overflow:hidden; }
+    .sug-name { font-size:14px; font-weight:500; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; display:block; }
+    .sug-meta { font-size:11px; color:var(--muted); display:flex; gap:5px; flex-wrap:nowrap; margin-top:2px; overflow:hidden; white-space:nowrap; }
+    .sug-meta span { flex-shrink:0; }
+    .sug-store { color:var(--amber) !important; font-weight:600; }
     .sug-add-btn {
       background: var(--amber); border:none; border-radius:6px;
-      color:#fff; font-size:12px; font-weight:600; padding:4px 9px;
+      color:#fff; font-size:12px; font-weight:600; padding:6px 10px;
       cursor:pointer; flex-shrink:0;
     }
     .no-results {
@@ -2159,11 +2162,17 @@ function showSuggestions(query) {
   drop.innerHTML = items.slice(0, 6).map(item => {
     const cc = catColor(item.category) || '#888';
     const price = item.price > 0 ? R(item.price) : '';
-    const sn = item.store && item.store !== 'any' ? storeName(item.store) : '';
+    const sn = item.store && item.store !== 'any' ? storeName(item.store) : 'Any Store';
     return `<div class="suggestion-item" data-libid="${item.id}">
       <div class="sug-color" style="background:${cc}"></div>
-      <div class="sug-name">${esc(item.name)}</div>
-      <div class="sug-meta">${esc(item.category)}${sn ? ' · ' + esc(sn) : ''}${price ? ' · ' + price : ''}</div>
+      <div class="sug-body">
+        <div class="sug-name">${esc(item.name)}</div>
+        <div class="sug-meta">
+          <span class="sug-store">🏪 ${esc(sn)}</span>
+          <span>${esc(item.category)}</span>
+          ${price ? `<span>${price}</span>` : ''}
+        </div>
+      </div>
       <button class="sug-add-btn" data-libid="${item.id}">Add</button>
     </div>`;
   }).join('');
