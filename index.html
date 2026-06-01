@@ -2159,10 +2159,11 @@ function showSuggestions(query) {
   drop.innerHTML = items.slice(0, 6).map(item => {
     const cc = catColor(item.category) || '#888';
     const price = item.price > 0 ? R(item.price) : '';
+    const sn = item.store && item.store !== 'any' ? storeName(item.store) : '';
     return `<div class="suggestion-item" data-libid="${item.id}">
       <div class="sug-color" style="background:${cc}"></div>
       <div class="sug-name">${esc(item.name)}</div>
-      <div class="sug-meta">${esc(item.category)}${price ? ' · ' + price : ''}</div>
+      <div class="sug-meta">${esc(item.category)}${sn ? ' · ' + esc(sn) : ''}${price ? ' · ' + price : ''}</div>
       <button class="sug-add-btn" data-libid="${item.id}">Add</button>
     </div>`;
   }).join('');
