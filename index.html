@@ -2067,8 +2067,11 @@ function initQtyPicker() {
     if (!_qtyLibId) return;
     const entry = (S.savedItems||[]).find(s => s.id === _qtyLibId);
     if (!entry) return;
+    // Track usage for ranking
+    entry.useCount = (entry.useCount || 0) + 1;
     addItem({ ...entry, quantity: _qtyVal });
     toast(`Added ${_qtyVal}× ${entry.name}`);
+    save();
     closeOverlay('qtyOverlay');
     document.getElementById('quickInput').value = '';
     hideSuggestions();
@@ -2120,8 +2123,10 @@ function rLibraryResults() {
   const query    = (input?.value || '').toLowerCase();
   const items    = S.savedItems || [];
   const filtered = query
-    ? items.filter(i => i.name.toLowerCase().includes(query) || i.category.toLowerCase().includes(query))
-    : items;
+    ? items
+        .filter(i => i.name.toLowerCase().includes(query) || i.category.toLowerCase().includes(query))
+        .sort((a, b) => (b.useCount || 0) - (a.useCount || 0))
+    : [...items].sort((a, b) => (b.useCount || 0) - (a.useCount || 0));
 
   if (items.length === 0) {
     results.innerHTML = `<div class="empty" style="padding:40px 0">
@@ -2180,7 +2185,9 @@ function initAutocomplete() {
 function showSuggestions(query) {
   const drop = document.getElementById('suggestionsDrop');
   if (!query) { hideSuggestions(); return; }
-  const items = (S.savedItems || []).filter(i => i.name.toLowerCase().includes(query.toLowerCase()));
+  const items = (S.savedItems || [])
+    .filter(i => i.name.toLowerCase().includes(query.toLowerCase()))
+    .sort((a, b) => (b.useCount || 0) - (a.useCount || 0));
   if (items.length === 0) { hideSuggestions(); return; }
 
   drop.innerHTML = items.map(item => {
