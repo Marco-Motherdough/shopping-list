@@ -406,7 +406,7 @@
     .suggestion-item:active { background: var(--cream-mid); }
     .sug-color { width:8px; height:8px; border-radius:50%; flex-shrink:0; margin-top:4px; align-self:flex-start; }
     .sug-body { flex:1; min-width:0; overflow:hidden; }
-    .sug-name { font-size:14px; font-weight:500; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; display:block; }
+    .sug-name { font-size:14px; font-weight:500; white-space:normal; word-break:break-word; display:block; }
     .sug-meta { font-size:11px; color:var(--muted); display:flex; gap:5px; flex-wrap:nowrap; margin-top:2px; overflow:hidden; white-space:nowrap; }
     .sug-meta span { flex-shrink:0; }
     .sug-store { color:var(--amber) !important; font-weight:600; }
@@ -2078,56 +2078,80 @@ function initQtyPicker() {
 // ── LIBRARY VIEW ───────────────────────────────────────────
 function rLibraryView() {
   const container = document.getElementById('libraryView');
-  const items = S.savedItems || [];
-  const query = (document.getElementById('libSearch')?.value || '').toLowerCase();
-  const filtered = query ? items.filter(i => i.name.toLowerCase().includes(query) || i.category.toLowerCase().includes(query)) : items;
 
-  const syncLine = S.catalogueLastSync
-    ? `<span style="font-size:12px;color:var(--sage)">✅ Last synced ${S.catalogueLastSync}</span>`
-    : `<span style="font-size:12px;color:var(--muted)">Not yet synced</span>`;
+  // First render: build the static shell (header, sync btn, search input)
+  if (!container.querySelector('#libSearch')) {
+    const syncLine = S.catalogueLastSync
+      ? `<span style="font-size:12px;color:var(--sage)">✅ Last synced ${S.catalogueLastSync}</span>`
+      : `<span style="font-size:12px;color:var(--muted)">Not yet synced</span>`;
 
-  let h = `<div class="lib-pad">
-    <h2>Item Catalogue</h2>
-    <p class="lib-sub">Items loaded from Google Sheets. Tap to add to your list.</p>
-    <div class="lib-transfer-row">
-      <button class="lib-transfer-btn primary" id="libSyncBtn">🔄 Sync Catalogue</button>
-      ${syncLine}
-    </div>
-    <div class="lib-search-wrap">
-      <span class="lib-search-ico">🔍</span>
-      <input class="lib-search" id="libSearch" type="text" placeholder="Search catalogue…" autocomplete="off" value="${esc(query)}" oninput="rLibraryView()" />
+    container.innerHTML = `<div class="lib-pad">
+      <h2>Item Catalogue</h2>
+      <p class="lib-sub">Items loaded from Google Sheets. Tap to add to your list.</p>
+      <div class="lib-transfer-row">
+        <button class="lib-transfer-btn primary" id="libSyncBtn">🔄 Sync Catalogue</button>
+        <span id="libSyncLine">${syncLine}</span>
+      </div>
+      <div class="lib-search-wrap">
+        <span class="lib-search-ico">🔍</span>
+        <input class="lib-search" id="libSearch" type="text" placeholder="Search catalogue…" autocomplete="off" />
+      </div>
+      <div id="libResults"></div>
     </div>`;
 
+    container.querySelector('#libSyncBtn').addEventListener('click', () => syncCatalogue(false));
+    container.querySelector('#libSearch').addEventListener('input', () => rLibraryResults());
+  } else {
+    // Update sync line if it changed
+    const syncLine = S.catalogueLastSync
+      ? `<span style="font-size:12px;color:var(--sage)">✅ Last synced ${S.catalogueLastSync}</span>`
+      : `<span style="font-size:12px;color:var(--muted)">Not yet synced</span>`;
+    const sl = container.querySelector('#libSyncLine');
+    if (sl) sl.innerHTML = syncLine;
+  }
+
+  rLibraryResults();
+}
+
+function rLibraryResults() {
+  const results  = document.getElementById('libResults');
+  if (!results) return;
+  const input    = document.getElementById('libSearch');
+  const query    = (input?.value || '').toLowerCase();
+  const items    = S.savedItems || [];
+  const filtered = query
+    ? items.filter(i => i.name.toLowerCase().includes(query) || i.category.toLowerCase().includes(query))
+    : items;
+
   if (items.length === 0) {
-    h += `<div class="empty" style="padding:40px 0">
+    results.innerHTML = `<div class="empty" style="padding:40px 0">
       <div class="empty-ico">📋</div>
       <h2 class="empty-ttl">Catalogue is empty</h2>
       <p class="empty-sub">Tap <strong>🔄 Sync Catalogue</strong> above<br>to load items from Google Sheets.</p>
     </div>`;
-  } else if (filtered.length === 0) {
-    h += `<div class="empty" style="padding:40px 0"><div class="empty-ico">🔍</div><p class="empty-sub">No items match "${esc(query)}"</p></div>`;
-  } else {
-    filtered.forEach(item => {
-      const cc = catColor(item.category) || '#888';
-      const sn = item.store !== 'any' ? storeName(item.store) : '';
-      h += `<div class="lib-item">
-        <div class="lib-item-strip" style="background:${cc}"></div>
-        <div class="lib-item-body">
-          <div class="lib-item-name">${esc(item.name)}</div>
-          <div class="lib-item-meta">${item.category}${sn ? ' · ' + esc(sn) : ''}</div>
-        </div>
-        <div class="lib-item-price">${item.price > 0 ? R(item.price) : '—'}</div>
-        <button class="lib-add-btn" data-libid="${item.id}" title="Add to list">+</button>
-      </div>`;
-    });
+    return;
   }
-  h += `</div>`;
-  container.innerHTML = h;
+  if (filtered.length === 0) {
+    results.innerHTML = `<div class="empty" style="padding:40px 0"><div class="empty-ico">🔍</div><p class="empty-sub">No items match "${esc(query)}"</p></div>`;
+    return;
+  }
 
-  // Wire sync button
-  container.querySelector('#libSyncBtn')?.addEventListener('click', () => syncCatalogue(false));
-
-  container.querySelectorAll('[data-libid]').forEach(b => b.addEventListener('click', () => addFromLibrary(b.dataset.libid)));
+  let h = '';
+  filtered.forEach(item => {
+    const cc = catColor(item.category) || '#888';
+    const sn = item.store !== 'any' ? storeName(item.store) : '';
+    h += `<div class="lib-item">
+      <div class="lib-item-strip" style="background:${cc}"></div>
+      <div class="lib-item-body">
+        <div class="lib-item-name">${esc(item.name)}</div>
+        <div class="lib-item-meta">${item.category}${sn ? ' · ' + esc(sn) : ''}</div>
+      </div>
+      <div class="lib-item-price">${item.price > 0 ? R(item.price) : '—'}</div>
+      <button class="lib-add-btn" data-libid="${item.id}" title="Add to list">+</button>
+    </div>`;
+  });
+  results.innerHTML = h;
+  results.querySelectorAll('[data-libid]').forEach(b => b.addEventListener('click', () => addFromLibrary(b.dataset.libid)));
 }
 
 // ── AUTOCOMPLETE ───────────────────────────────────────────
