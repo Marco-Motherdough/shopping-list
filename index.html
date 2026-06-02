@@ -392,7 +392,7 @@
       position:absolute; top:calc(100% + 4px); left:0; right:0;
       background: var(--white); border-radius: var(--r);
       box-shadow: var(--shadow-lg);
-      z-index:60; overflow:hidden;
+      z-index:60; overflow-y:auto; max-height:320px;
       border: 1.5px solid var(--border);
       display:none;
     }
@@ -2159,7 +2159,7 @@ function showSuggestions(query) {
   const items = (S.savedItems || []).filter(i => i.name.toLowerCase().includes(query.toLowerCase()));
   if (items.length === 0) { hideSuggestions(); return; }
 
-  drop.innerHTML = items.slice(0, 6).map(item => {
+  drop.innerHTML = items.map(item => {
     const cc = catColor(item.category) || '#888';
     const price = item.price > 0 ? R(item.price) : '';
     const sn = item.store && item.store !== 'any' ? storeName(item.store) : 'Any Store';
