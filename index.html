@@ -4136,23 +4136,26 @@ function buildDetailedExport() {
   const l = activeList(); if (!l) return '';
   const items = l.items.filter(i=>!i.ticked);
   let txt = `📋 ${l.name}\n📅 ${new Date().toLocaleDateString('en-ZA',{weekday:'long',year:'numeric',month:'long',day:'numeric'})}\n\n`;
+
+  // Group by store
   const grouped = {};
-  getCats().forEach(({name:cat}) => { const ci = items.filter(i=>i.category===cat); if (ci.length) grouped[cat]=ci; });
-  // uncategorised
-  const catted = new Set(Object.values(grouped).flat().map(i=>i.id));
-  const uncat  = items.filter(i => !catted.has(i.id));
-  if (uncat.length) grouped['Other'] = [...(grouped['Other']||[]), ...uncat.filter(i=>!grouped['Other']?.find(x=>x.id===i.id))];
-  Object.entries(grouped).forEach(([cat,ci])=>{
-    txt += `── ${cat} ──\n`;
-    ci.forEach(i=>{
-      const sn = i.store!=='any' ? ` [${storeName(i.store)}]` : '';
+  items.forEach(i => {
+    const sn = i.store && i.store !== 'any' ? storeName(i.store) : 'Other';
+    if (!grouped[sn]) grouped[sn] = [];
+    grouped[sn].push(i);
+  });
+
+  Object.entries(grouped).forEach(([store, si]) => {
+    txt += `── ${store} ──\n`;
+    si.forEach(i => {
       const lt = lineTotal(i);
       const qtyPart = i.quantity > 1 ? ` ×${i.quantity} @ ${R(i.price)} ea` : '';
-      txt += `• ${i.name}${qtyPart} — ${R(lt)}${sn}\n`;
+      txt += `• ${i.name}${qtyPart} — ${R(lt)}\n`;
       if (i.notes) txt += `  ↳ ${i.notes}\n`;
     });
     txt += '\n';
   });
+
   const tot = items.reduce((s,i)=>s+lineTotal(i),0);
   txt += `${'─'.repeat(32)}\nEst. total (${items.length} item${items.length!==1?'s':''}): ${R(tot)}`;
   return txt;
