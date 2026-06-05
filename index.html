@@ -471,6 +471,65 @@
       cursor:pointer; border-radius:6px; flex-shrink:0;
     }
     .lib-del-btn:active { color:var(--rust); background:var(--cream-mid); }
+
+    /* ── MANAGE PANEL ──────────────────────────────────────── */
+    .lib-manage-toggle {
+      width:100%; height:38px; border-radius:9px;
+      border:1.5px solid var(--border); background:var(--white);
+      font-family:'DM Sans',sans-serif; font-size:13px; font-weight:600;
+      color:var(--dark); cursor:pointer; display:flex; align-items:center;
+      justify-content:space-between; padding:0 14px;
+      transition: all .15s; margin-bottom:12px;
+    }
+    .lib-manage-toggle:active { background:var(--cream-mid); }
+    .lib-manage-toggle .mgr-chevron { font-size:11px; color:var(--amber); transition:transform .2s; }
+    .lib-manage-toggle.open .mgr-chevron { transform:rotate(180deg); }
+    .lib-manage-panel {
+      background:var(--cream-mid); border-radius:var(--r);
+      border:1.5px solid var(--border); margin-bottom:14px;
+      overflow:hidden;
+    }
+    .lib-manage-group {
+      border-bottom:1px solid var(--border);
+    }
+    .lib-manage-group:last-child { border-bottom:none; }
+    .lib-manage-group-hdr {
+      display:flex; align-items:center; gap:10px;
+      padding:12px 14px; cursor:pointer;
+      background:var(--white);
+      transition: background .15s;
+    }
+    .lib-manage-group-hdr:active { background:var(--cream-mid); }
+    .lib-manage-group-icon { font-size:18px; flex-shrink:0; }
+    .lib-manage-group-info { flex:1; min-width:0; }
+    .lib-manage-group-title { font-size:15px; font-weight:600; }
+    .lib-manage-group-sub { font-size:12px; color:var(--muted); margin-top:1px; }
+    .lib-manage-group-actions { display:flex; gap:6px; align-items:center; }
+    .lib-manage-expand { font-size:11px; color:var(--amber); transition:transform .2s; }
+    .lib-manage-expand.open { transform:rotate(180deg); }
+    .lib-manage-del-all {
+      background:var(--rust); border:none; border-radius:7px;
+      color:#fff; font-size:12px; font-weight:600; padding:5px 10px;
+      cursor:pointer; white-space:nowrap; flex-shrink:0;
+    }
+    .lib-manage-del-all:active { opacity:.8; }
+    .lib-manage-items { display:none; }
+    .lib-manage-items.open { display:block; }
+    .lib-manage-item {
+      display:flex; align-items:center; gap:10px;
+      padding:10px 14px; border-top:1px solid var(--border);
+      background:var(--cream);
+    }
+    .lib-manage-item-strip { width:3px; height:28px; border-radius:2px; flex-shrink:0; }
+    .lib-manage-item-name { flex:1; font-size:14px; font-weight:500; min-width:0; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+    .lib-manage-item-meta { font-size:12px; color:var(--muted); }
+    .lib-manage-item-del {
+      background:none; border:none; color:var(--muted);
+      font-size:16px; width:30px; height:30px;
+      display:flex; align-items:center; justify-content:center;
+      cursor:pointer; border-radius:6px; flex-shrink:0;
+    }
+    .lib-manage-item-del:active { color:var(--rust); background:var(--cream-mid); }
     .save-to-lib-row {
       display:flex; align-items:center; gap:10px;
       padding:12px 0 4px; cursor:pointer;
@@ -2095,6 +2154,11 @@ function rLibraryView() {
         <button class="lib-transfer-btn primary" id="libSyncBtn">🔄 Sync Catalogue</button>
         <span id="libSyncLine">${syncLine}</span>
       </div>
+      <button class="lib-manage-toggle" id="libManageToggle">
+        <span>🗂 Manage Catalogue</span>
+        <span class="mgr-chevron">▼</span>
+      </button>
+      <div id="libManagePanel" class="lib-manage-panel" style="display:none"></div>
       <div class="lib-search-wrap">
         <span class="lib-search-ico">🔍</span>
         <input class="lib-search" id="libSearch" type="text" placeholder="Search catalogue…" autocomplete="off" />
@@ -2104,6 +2168,7 @@ function rLibraryView() {
 
     container.querySelector('#libSyncBtn').addEventListener('click', () => syncCatalogue(false));
     container.querySelector('#libSearch').addEventListener('input', () => rLibraryResults());
+    container.querySelector('#libManageToggle').addEventListener('click', toggleManagePanel);
   } else {
     // Update sync line if it changed
     const syncLine = S.catalogueLastSync
@@ -2157,6 +2222,141 @@ function rLibraryResults() {
   });
   results.innerHTML = h;
   results.querySelectorAll('[data-libid]').forEach(b => b.addEventListener('click', () => addFromLibrary(b.dataset.libid)));
+}
+
+// ── MANAGE PANEL ───────────────────────────────────────────
+function toggleManagePanel() {
+  const panel  = document.getElementById('libManagePanel');
+  const toggle = document.getElementById('libManageToggle');
+  if (!panel || !toggle) return;
+  const isOpen = panel.style.display !== 'none';
+  if (isOpen) {
+    panel.style.display = 'none';
+    toggle.classList.remove('open');
+  } else {
+    panel.style.display = '';
+    toggle.classList.add('open');
+    rManagePanel();
+  }
+}
+
+function rManagePanel() {
+  const panel = document.getElementById('libManagePanel');
+  if (!panel || panel.style.display === 'none') return;
+
+  const sheetItems  = (S.savedItems || []).filter(i => i.fromSheet === true);
+  const manualItems = (S.savedItems || []).filter(i => i.fromSheet !== true);
+
+  const groups = [
+    {
+      key:   'sheet',
+      icon:  '📋',
+      title: 'Synced from Sheet',
+      sub:   `${sheetItems.length} item${sheetItems.length !== 1 ? 's' : ''} — managed by Google Sheets`,
+      items: sheetItems,
+      color: '#4A7EA5',
+    },
+    {
+      key:   'manual',
+      icon:  '✏️',
+      title: 'Manually Added',
+      sub:   `${manualItems.length} item${manualItems.length !== 1 ? 's' : ''} — added by staff on this device`,
+      items: manualItems,
+      color: '#5A7A5C',
+    },
+  ];
+
+  // Preserve expanded state
+  const expanded = {};
+  panel.querySelectorAll('.lib-manage-group').forEach(g => {
+    if (g.dataset.groupKey) expanded[g.dataset.groupKey] = g.querySelector('.lib-manage-items')?.classList.contains('open');
+  });
+
+  let h = '';
+  groups.forEach(grp => {
+    const isExp = expanded[grp.key] || false;
+    h += `<div class="lib-manage-group" data-group-key="${grp.key}">
+      <div class="lib-manage-group-hdr" data-expand-key="${grp.key}">
+        <span class="lib-manage-group-icon">${grp.icon}</span>
+        <div class="lib-manage-group-info">
+          <div class="lib-manage-group-title">${grp.title}</div>
+          <div class="lib-manage-group-sub">${grp.sub}</div>
+        </div>
+        <div class="lib-manage-group-actions">
+          ${grp.items.length > 0 ? `<button class="lib-manage-del-all" data-delgroup="${grp.key}">🗑 Delete all</button>` : ''}
+          <span class="lib-manage-expand${isExp ? ' open' : ''}">▼</span>
+        </div>
+      </div>
+      <div class="lib-manage-items${isExp ? ' open' : ''}">`;
+
+    if (grp.items.length === 0) {
+      h += `<div class="lib-manage-item" style="color:var(--muted);font-size:13px;justify-content:center;padding:14px">None</div>`;
+    } else {
+      grp.items.forEach(item => {
+        const cc = catColor(item.category) || grp.color;
+        h += `<div class="lib-manage-item">
+          <div class="lib-manage-item-strip" style="background:${cc}"></div>
+          <div style="flex:1;min-width:0">
+            <div class="lib-manage-item-name">${esc(item.name)}</div>
+            <div class="lib-manage-item-meta">${esc(item.category)}${item.price > 0 ? ' · ' + R(item.price) : ''}</div>
+          </div>
+          <button class="lib-manage-item-del" data-delitem="${item.id}" title="Delete">🗑</button>
+        </div>`;
+      });
+    }
+
+    h += `</div></div>`;
+  });
+
+  panel.innerHTML = h;
+
+  // Expand/collapse group rows
+  panel.querySelectorAll('[data-expand-key]').forEach(hdr => {
+    hdr.addEventListener('click', e => {
+      if (e.target.closest('[data-delgroup]')) return; // don't expand when clicking delete
+      const key   = hdr.dataset.expandKey;
+      const grpEl = panel.querySelector(`.lib-manage-group[data-group-key="${key}"]`);
+      const items = grpEl?.querySelector('.lib-manage-items');
+      const chevron = hdr.querySelector('.lib-manage-expand');
+      if (!items) return;
+      const nowOpen = !items.classList.contains('open');
+      items.classList.toggle('open', nowOpen);
+      chevron?.classList.toggle('open', nowOpen);
+    });
+  });
+
+  // Delete individual item
+  panel.querySelectorAll('[data-delitem]').forEach(btn => {
+    btn.addEventListener('click', () => {
+      const id = btn.dataset.delitem;
+      const item = (S.savedItems || []).find(i => i.id === id);
+      if (!item) return;
+      if (!confirm(`Delete "${item.name}" from the catalogue?`)) return;
+      S.savedItems = S.savedItems.filter(i => i.id !== id);
+      save();
+      rManagePanel();
+      rLibraryResults();
+      toast(`Deleted: ${item.name}`);
+    });
+  });
+
+  // Delete all in group
+  panel.querySelectorAll('[data-delgroup]').forEach(btn => {
+    btn.addEventListener('click', e => {
+      e.stopPropagation();
+      const key   = btn.dataset.delgroup;
+      const isSheet = key === 'sheet';
+      const grpItems = (S.savedItems || []).filter(i => (i.fromSheet === true) === isSheet);
+      if (grpItems.length === 0) return;
+      const label = isSheet ? 'synced (Sheet)' : 'manually added';
+      if (!confirm(`Delete all ${grpItems.length} ${label} items from the catalogue?\nThis cannot be undone.`)) return;
+      S.savedItems = (S.savedItems || []).filter(i => (i.fromSheet === true) !== isSheet);
+      save();
+      rManagePanel();
+      rLibraryResults();
+      toast(`Deleted ${grpItems.length} ${label} items`);
+    });
+  });
 }
 
 // ── AUTOCOMPLETE ───────────────────────────────────────────
