@@ -4293,24 +4293,14 @@ function buildMultiStoreExport() {
     txt += `📍 ${l.name.toUpperCase()}\n`;
     txt += `${'─'.repeat(28)}\n`;
 
-    // Group by category
-    const grouped = {};
-    getCats().forEach(({name: cat}) => {
-      const ci = items.filter(i => i.category === cat);
-      if (ci.length) grouped[cat] = ci;
-    });
-    const catted = new Set(Object.values(grouped).flat().map(i => i.id));
-    const uncat  = items.filter(i => !catted.has(i.id));
-    if (uncat.length) grouped['Other'] = [...(grouped['Other'] || []), ...uncat.filter(i => !(grouped['Other']||[]).find(x=>x.id===i.id))];
+    // Sort items alphabetically by name within each store
+    const sorted = [...items].sort((a, b) => a.name.localeCompare(b.name));
 
-    if (Object.keys(grouped).length) {
-      Object.entries(grouped).forEach(([cat, ci]) => {
-        txt += `  ${cat}\n`;
-        ci.forEach(i => {
-          const qty = i.quantity > 1 ? ` ×${i.quantity}` : '';
-          const price = i.price > 0 ? `  ${R(lineTotal(i))}` : '';
-          txt += `  • ${i.name}${qty}${price}\n`;
-        });
+    if (sorted.length) {
+      sorted.forEach(i => {
+        const qty = i.quantity > 1 ? ` ×${i.quantity}` : '';
+        const price = i.price > 0 ? `  ${R(lineTotal(i))}` : '';
+        txt += `  • ${i.name}${qty}${price}\n`;
       });
     } else {
       txt += `  (no items)\n`;
