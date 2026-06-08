@@ -4293,14 +4293,28 @@ function buildMultiStoreExport() {
     txt += `📍 ${l.name.toUpperCase()}\n`;
     txt += `${'─'.repeat(28)}\n`;
 
-    // Sort items alphabetically by name within each store
-    const sorted = [...items].sort((a, b) => a.name.localeCompare(b.name));
+    // Group by store (Woolworths, Checkers, etc.)
+    const storeGroups = {};
+    items.forEach(i => {
+      const sn = i.store && i.store !== 'any' ? storeName(i.store) : 'Any Store';
+      if (!storeGroups[sn]) storeGroups[sn] = [];
+      storeGroups[sn].push(i);
+    });
+    // Sort store group names alphabetically, but keep 'Any Store' last
+    const storeNames = Object.keys(storeGroups).sort((a, b) => {
+      if (a === 'Any Store') return 1;
+      if (b === 'Any Store') return -1;
+      return a.localeCompare(b);
+    });
 
-    if (sorted.length) {
-      sorted.forEach(i => {
-        const qty = i.quantity > 1 ? ` ×${i.quantity}` : '';
-        const price = i.price > 0 ? `  ${R(lineTotal(i))}` : '';
-        txt += `  • ${i.name}${qty}${price}\n`;
+    if (storeNames.length) {
+      storeNames.forEach(sn => {
+        txt += `  ── ${sn} ──\n`;
+        storeGroups[sn].sort((a, b) => a.name.localeCompare(b.name)).forEach(i => {
+          const qty = i.quantity > 1 ? ` ×${i.quantity}` : '';
+          const price = i.price > 0 ? `  ${R(lineTotal(i))}` : '';
+          txt += `  • ${i.name}${qty}${price}\n`;
+        });
       });
     } else {
       txt += `  (no items)\n`;
