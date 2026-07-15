@@ -410,6 +410,7 @@
     .sug-meta { font-size:11px; color:var(--muted); display:flex; gap:5px; flex-wrap:nowrap; margin-top:2px; overflow:hidden; white-space:nowrap; }
     .sug-meta span { flex-shrink:0; }
     .sug-store { color:var(--amber) !important; font-weight:600; }
+    .sug-pop { color:var(--sage) !important; font-weight:600; }
     .sug-add-btn {
       background: var(--amber); border:none; border-radius:6px;
       color:#fff; font-size:12px; font-weight:600; padding:6px 10px;
@@ -1462,6 +1463,33 @@ const APPS_SCRIPT_URL = 'https://script.google.com/macros/s/AKfycbzN98bV2gpfVNQg
 const DEF_STORES = ['Checkers','Pick n Pay','Woolworths','Spar'];
 const SK = 'shopList_v2';
 
+// ── DEVICE IDENTITY (so each device gets its own predictive ranking) ──
+// The ID/name live in this browser's localStorage — they persist across
+// sessions on this device, but are never shared with other devices.
+// They're only used (a) to keep this device's own use-counts, and
+// (b) as a label in the Sheet's "Selections" log so it's readable.
+const DK_ID = 'shopDeviceId', DK_NAME = 'shopDeviceName';
+const NAME_ADJ = ['Amber','Cedar','Willow','Sage','Clover','Hazel','Juniper','Rowan','Basil','Coral','Indigo','Marigold'];
+const NAME_NOUN = ['Fox','Otter','Heron','Sparrow','Falcon','Badger','Lynx','Robin','Finch','Hare','Wren','Swift'];
+function getOrCreateDeviceId() {
+  let id = localStorage.getItem(DK_ID);
+  if (!id) {
+    id = Date.now().toString(36) + Math.random().toString(36).slice(2,10) + Math.random().toString(36).slice(2,10);
+    localStorage.setItem(DK_ID, id);
+  }
+  return id;
+}
+function getOrCreateDeviceName() {
+  let name = localStorage.getItem(DK_NAME);
+  if (!name) {
+    name = NAME_ADJ[Math.floor(Math.random()*NAME_ADJ.length)] + ' ' + NAME_NOUN[Math.floor(Math.random()*NAME_NOUN.length)];
+    localStorage.setItem(DK_NAME, name);
+  }
+  return name;
+}
+const DEVICE_ID   = getOrCreateDeviceId();
+const DEVICE_NAME = getOrCreateDeviceName();
+
 // ═══════════════════════════════════════════════════════════
 // STATE
 // ═══════════════════════════════════════════════════════════
@@ -1630,6 +1658,77 @@ async function syncCatalogue(silent = false) {
 }
 
 // ═══════════════════════════════════════════════════════════
+// SELECTION TRACKING (drives predictive search)
+// ═══════════════════════════════════════════════════════════
+// Every time an item is added to a list, two things happen:
+//  1. This device's own use-count for that item, at that store, is
+//     bumped in localStorage (S.savedItems[].storeCounts) — this is
+//     what actually powers the "most used first" ordering below, and
+//     it's inherently per-device since it lives in this browser only.
+//  2. A row is fired off to the shared Google Sheet's "Selections" tab
+//     (fire-and-forget — never blocks the UI, never breaks it if the
+//     device is offline) purely as a live record of what's being
+//     bought, tagged with this device's name, for the shop owner.
+
+async function logSelectionToSheet(payload) {
+  if (!APPS_SCRIPT_URL || APPS_SCRIPT_URL === 'YOUR_APPS_SCRIPT_URL_HERE') return;
+  try {
+    await fetch(APPS_SCRIPT_URL, {
+      method: 'POST',
+      body: JSON.stringify({ action: 'logSelection', ...payload }),
+    });
+  } catch (err) {
+    console.warn('Selection log did not reach the Sheet (offline?):', err);
+  }
+}
+
+function trackSelection(d) {
+  if (!d || !d.name) return;
+
+  // Which store this selection counts against: the item's own assigned
+  // store if it has one, otherwise whichever store filter is currently
+  // active (i.e. the shop you're actually shopping at right now).
+  const storeCtx = (d.store && d.store !== 'any')
+    ? d.store
+    : (S.filterStore && S.filterStore !== 'all' ? S.filterStore : 'any');
+
+  if (!S.savedItems) S.savedItems = [];
+  let entry = S.savedItems.find(s => s.name.toLowerCase() === d.name.toLowerCase());
+  if (!entry) {
+    entry = {
+      id: uid(), name: d.name, category: d.category || 'Other',
+      store: d.store || 'any', price: d.price || 0, quantity: 1, notes: '',
+      fromSheet: false, storeCounts: {},
+    };
+    S.savedItems.unshift(entry);
+  }
+  if (!entry.storeCounts) entry.storeCounts = {};
+  entry.storeCounts[storeCtx] = (entry.storeCounts[storeCtx] || 0) + 1;
+  save();
+
+  logSelectionToSheet({
+    deviceId:   DEVICE_ID,
+    deviceName: DEVICE_NAME,
+    item:       d.name,
+    category:   d.category || 'Other',
+    store:      storeCtx === 'any' ? 'Any' : storeName(storeCtx),
+    price:      d.price || 0,
+  });
+}
+
+// Ranking score for predictive search / library ordering: how many
+// times THIS device has picked this item, weighted to the store
+// currently being shopped (S.filterStore) when one is selected.
+function itemScore(item) {
+  const sc = item.storeCounts || {};
+  if (S.filterStore && S.filterStore !== 'all') {
+    return sc[S.filterStore] || 0;
+  }
+  const total = Object.values(sc).reduce((a, b) => a + b, 0);
+  return total || item.useCount || 0; // useCount = fallback for pre-existing data
+}
+
+// ═══════════════════════════════════════════════════════════
 // GETTERS
 // ═══════════════════════════════════════════════════════════
 const activeList = () => S.lists.find(l => l.id === S.activeListId) || S.lists[0];
@@ -1655,7 +1754,9 @@ const lineTotal = i => i.price * i.quantity;
 // ═══════════════════════════════════════════════════════════
 function addItem(d) {
   const l = activeList(); if (!l) return;
-  l.items.push(mkItem(d)); save(); render();
+  l.items.push(mkItem(d));
+  trackSelection(d);
+  save(); render();
 }
 function updateItem(id, d) {
   const l = activeList(); if (!l) return;
@@ -2126,8 +2227,7 @@ function initQtyPicker() {
     if (!_qtyLibId) return;
     const entry = (S.savedItems||[]).find(s => s.id === _qtyLibId);
     if (!entry) return;
-    // Track usage for ranking
-    entry.useCount = (entry.useCount || 0) + 1;
+    // Usage tracking (per-device, per-store) happens inside addItem()
     addItem({ ...entry, quantity: _qtyVal });
     toast(`Added ${_qtyVal}× ${entry.name}`);
     save();
@@ -2190,8 +2290,8 @@ function rLibraryResults() {
   const filtered = query
     ? items
         .filter(i => i.name.toLowerCase().includes(query) || i.category.toLowerCase().includes(query))
-        .sort((a, b) => (b.useCount || 0) - (a.useCount || 0))
-    : [...items].sort((a, b) => (b.useCount || 0) - (a.useCount || 0));
+        .sort((a, b) => itemScore(b) - itemScore(a))
+    : [...items].sort((a, b) => itemScore(b) - itemScore(a));
 
   if (items.length === 0) {
     results.innerHTML = `<div class="empty" style="padding:40px 0">
@@ -2387,13 +2487,19 @@ function showSuggestions(query) {
   if (!query) { hideSuggestions(); return; }
   const items = (S.savedItems || [])
     .filter(i => i.name.toLowerCase().includes(query.toLowerCase()))
-    .sort((a, b) => (b.useCount || 0) - (a.useCount || 0));
+    .sort((a, b) => itemScore(b) - itemScore(a));
   if (items.length === 0) { hideSuggestions(); return; }
+
+  const inStoreCtx = S.filterStore && S.filterStore !== 'all';
 
   drop.innerHTML = items.map(item => {
     const cc = catColor(item.category) || '#888';
     const price = item.price > 0 ? R(item.price) : '';
     const sn = item.store && item.store !== 'any' ? storeName(item.store) : 'Any Store';
+    const score = itemScore(item);
+    const popTag = inStoreCtx && score > 0
+      ? `<span class="sug-pop">🔥 ${score}× here</span>`
+      : '';
     return `<div class="suggestion-item" data-libid="${item.id}">
       <div class="sug-color" style="background:${cc}"></div>
       <div class="sug-body">
@@ -2402,6 +2508,7 @@ function showSuggestions(query) {
           <span class="sug-store">🏪 ${esc(sn)}</span>
           <span>${esc(item.category)}</span>
           ${price ? `<span>${price}</span>` : ''}
+          ${popTag}
         </div>
       </div>
       <button class="sug-add-btn" data-libid="${item.id}">Add</button>
