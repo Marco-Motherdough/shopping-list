@@ -128,6 +128,26 @@
     }
     .filter-chip.active { background: var(--amber); border-color: var(--amber); color:#fff; }
 
+    /* ── SEARCH SCOPE TOGGLE ───────────────────────────────── */
+    .search-store-bar {
+      display:flex; align-items:center; gap:6px;
+      padding: 0 14px 10px;
+      overflow-x:auto; scrollbar-width:none;
+    }
+    .search-store-bar::-webkit-scrollbar { display:none; }
+    .search-store-label {
+      font-size:11px; font-weight:600; color: var(--muted);
+      flex-shrink:0; white-space:nowrap; display:flex; align-items:center; gap:3px;
+    }
+    .search-store-chip {
+      flex-shrink:0; height:26px; padding:0 12px;
+      border-radius:13px; border:1.5px solid var(--border);
+      background: var(--white); color: var(--muted);
+      font-family:'DM Sans',sans-serif; font-size:12px; font-weight:600;
+      cursor:pointer; transition: all .15s; white-space:nowrap;
+    }
+    .search-store-chip.active { background: var(--sage); border-color: var(--sage); color:#fff; }
+
     /* ── TOTALS BAR ────────────────────────────────────── */
     .totals-bar {
       background: var(--dark); color:#fff;
@@ -946,6 +966,9 @@
     <button class="quick-add-btn" id="quickAddBtn" title="Add with details">+</button>
   </div>
 
+  <!-- Search scope toggle: which store's items to search/suggest -->
+  <div class="search-store-bar" id="searchStoreBar"></div>
+
   <!-- Filter chips -->
   <div class="filter-bar" id="filterBar"></div>
 
@@ -1500,6 +1523,7 @@ let S = {
   activeListId: null,
   view: 'list',
   filterStore: 'all',
+  searchStore: 'all',   // which store predictive search is scoped to (independent of the list filter)
   savedItems: [],
   suppliers: [],
   orderItems: [],
@@ -1686,11 +1710,12 @@ function trackSelection(d) {
   if (!d || !d.name) return;
 
   // Which store this selection counts against: the item's own assigned
-  // store if it has one, otherwise whichever store filter is currently
-  // active (i.e. the shop you're actually shopping at right now).
+  // store if it has one, otherwise the active search scope (the store
+  // toggle next to the search box), then the list filter, then 'any'.
   const storeCtx = (d.store && d.store !== 'any')
     ? d.store
-    : (S.filterStore && S.filterStore !== 'all' ? S.filterStore : 'any');
+    : (S.searchStore && S.searchStore !== 'all' ? S.searchStore
+      : (S.filterStore && S.filterStore !== 'all' ? S.filterStore : 'any'));
 
   if (!S.savedItems) S.savedItems = [];
   let entry = S.savedItems.find(s => s.name.toLowerCase() === d.name.toLowerCase());
@@ -1717,12 +1742,12 @@ function trackSelection(d) {
 }
 
 // Ranking score for predictive search / library ordering: how many
-// times THIS device has picked this item, weighted to the store
-// currently being shopped (S.filterStore) when one is selected.
-function itemScore(item) {
+// times THIS device has picked this item, weighted to whichever store
+// context is passed in (pass 'all' or omit for overall popularity).
+function itemScore(item, ctx) {
   const sc = item.storeCounts || {};
-  if (S.filterStore && S.filterStore !== 'all') {
-    return sc[S.filterStore] || 0;
+  if (ctx && ctx !== 'all') {
+    return sc[ctx] || 0;
   }
   const total = Object.values(sc).reduce((a, b) => a + b, 0);
   return total || item.useCount || 0; // useCount = fallback for pre-existing data
@@ -1814,6 +1839,7 @@ function deleteStore(id) {
   allItems().forEach(i => { if (i.store === id) i.store = 'any'; });
   S.stores = S.stores.filter(s => s.id !== id);
   if (S.filterStore === id) S.filterStore = 'all';
+  if (S.searchStore === id) S.searchStore = 'all';
   save(); render();
 }
 
@@ -1821,7 +1847,7 @@ function deleteStore(id) {
 // RENDER
 // ═══════════════════════════════════════════════════════════
 function render() {
-  rHeader(); rFilterBar(); rTotals(); rNav();
+  rHeader(); rFilterBar(); rSearchStoreBar(); rTotals(); rNav();
   const views = { list:'listView', bystore:'storeView', summary:'summaryView', library:'libraryView', order:'orderView', bakery:'bakeryView' };
   Object.entries(views).forEach(([v,id]) => {
     document.getElementById(id).style.display = S.view === v ? '' : 'none';
@@ -1832,6 +1858,7 @@ function render() {
   const showBar = (S.view === 'list' || S.view === 'bystore') && !isSpecial;
   document.querySelector('.quick-add-wrap').style.display = showBar ? '' : 'none';
   document.getElementById('filterBar').style.display = showBar ? '' : 'none';
+  document.getElementById('searchStoreBar').style.display = showBar ? '' : 'none';
   document.getElementById('exportBtn').style.display = isSpecial ? 'none' : '';
   document.getElementById('storesBtn').style.display = isSpecial ? 'none' : '';
   document.getElementById('catMgmtBtn').style.display = isSpecial ? 'none' : '';
@@ -1861,6 +1888,23 @@ function rFilterBar() {
   bar.innerHTML = h;
   bar.querySelectorAll('.filter-chip').forEach(b => b.addEventListener('click', () => {
     S.filterStore = b.dataset.sid; save(); rFilterBar(); rTotals(); rListView(); rStoreView();
+  }));
+}
+
+function rSearchStoreBar() {
+  const bar = document.getElementById('searchStoreBar');
+  if (!bar) return;
+  let h = `<span class="search-store-label">🔍 Search:</span>`;
+  h += `<button class="search-store-chip${S.searchStore==='all'?' active':''}" data-sid="all">All</button>`;
+  S.stores.forEach(s => {
+    h += `<button class="search-store-chip${S.searchStore===s.id?' active':''}" data-sid="${s.id}">${esc(s.name)}</button>`;
+  });
+  bar.innerHTML = h;
+  bar.querySelectorAll('.search-store-chip').forEach(b => b.addEventListener('click', () => {
+    S.searchStore = b.dataset.sid; save(); rSearchStoreBar();
+    // Live-refresh whatever's currently in the search box against the new scope
+    const qi = document.getElementById('quickInput');
+    if (qi && qi.value.trim()) showSuggestions(qi.value.trim());
   }));
 }
 
@@ -2290,8 +2334,8 @@ function rLibraryResults() {
   const filtered = query
     ? items
         .filter(i => i.name.toLowerCase().includes(query) || i.category.toLowerCase().includes(query))
-        .sort((a, b) => itemScore(b) - itemScore(a))
-    : [...items].sort((a, b) => itemScore(b) - itemScore(a));
+        .sort((a, b) => itemScore(b, S.filterStore) - itemScore(a, S.filterStore))
+    : [...items].sort((a, b) => itemScore(b, S.filterStore) - itemScore(a, S.filterStore));
 
   if (items.length === 0) {
     results.innerHTML = `<div class="empty" style="padding:40px 0">
@@ -2485,14 +2529,14 @@ function initAutocomplete() {
 function showSuggestions(query) {
   const drop = document.getElementById('suggestionsDrop');
   if (!query) { hideSuggestions(); return; }
-  const inStoreCtx = S.filterStore && S.filterStore !== 'all';
+  const inStoreCtx = S.searchStore && S.searchStore !== 'all';
   const items = (S.savedItems || [])
     .filter(i => i.name.toLowerCase().includes(query.toLowerCase()))
-    .filter(i => !inStoreCtx || i.store === 'any' || i.store === S.filterStore)
-    .sort((a, b) => itemScore(b) - itemScore(a));
+    .filter(i => !inStoreCtx || i.store === 'any' || i.store === S.searchStore)
+    .sort((a, b) => itemScore(b, S.searchStore) - itemScore(a, S.searchStore));
   if (items.length === 0) {
     if (inStoreCtx) {
-      drop.innerHTML = `<div class="no-results">No matches at ${esc(storeName(S.filterStore))} — try "All" to search every store</div>`;
+      drop.innerHTML = `<div class="no-results">No matches at ${esc(storeName(S.searchStore))} — try "All" to search every store</div>`;
       drop.scrollTop = 0;
       drop.classList.add('open');
     } else {
@@ -2505,7 +2549,7 @@ function showSuggestions(query) {
     const cc = catColor(item.category) || '#888';
     const price = item.price > 0 ? R(item.price) : '';
     const sn = item.store && item.store !== 'any' ? storeName(item.store) : 'Any Store';
-    const score = itemScore(item);
+    const score = itemScore(item, S.searchStore);
     const popTag = inStoreCtx && score > 0
       ? `<span class="sug-pop">🔥 ${score}× here</span>`
       : '';
