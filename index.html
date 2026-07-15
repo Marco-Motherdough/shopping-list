@@ -2485,12 +2485,21 @@ function initAutocomplete() {
 function showSuggestions(query) {
   const drop = document.getElementById('suggestionsDrop');
   if (!query) { hideSuggestions(); return; }
+  const inStoreCtx = S.filterStore && S.filterStore !== 'all';
   const items = (S.savedItems || [])
     .filter(i => i.name.toLowerCase().includes(query.toLowerCase()))
+    .filter(i => !inStoreCtx || i.store === 'any' || i.store === S.filterStore)
     .sort((a, b) => itemScore(b) - itemScore(a));
-  if (items.length === 0) { hideSuggestions(); return; }
-
-  const inStoreCtx = S.filterStore && S.filterStore !== 'all';
+  if (items.length === 0) {
+    if (inStoreCtx) {
+      drop.innerHTML = `<div class="no-results">No matches at ${esc(storeName(S.filterStore))} — try "All" to search every store</div>`;
+      drop.scrollTop = 0;
+      drop.classList.add('open');
+    } else {
+      hideSuggestions();
+    }
+    return;
+  }
 
   drop.innerHTML = items.map(item => {
     const cc = catColor(item.category) || '#888';
@@ -2522,11 +2531,14 @@ function showSuggestions(query) {
     hideSuggestions();
   }));
 
+  drop.scrollTop = 0;   // always start scrolled to the top, even if the box was scrolled down before
   drop.classList.add('open');
 }
 
 function hideSuggestions() {
-  document.getElementById('suggestionsDrop').classList.remove('open');
+  const drop = document.getElementById('suggestionsDrop');
+  drop.classList.remove('open');
+  drop.scrollTop = 0;   // reset so next time it opens it's back at the top
 }
 
 // ═══════════════════════════════════════════════════════════
