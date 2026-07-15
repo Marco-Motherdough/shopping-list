@@ -131,8 +131,8 @@
     /* ── SEARCH SCOPE TOGGLE ───────────────────────────────── */
     .search-store-bar {
       display:flex; align-items:center; gap:6px;
-      padding: 0 14px 10px;
-      overflow-x:auto; scrollbar-width:none;
+      padding: 10px 14px 10px;
+      overflow-x:auto; overflow-y:visible; scrollbar-width:none;
     }
     .search-store-bar::-webkit-scrollbar { display:none; }
     .search-store-label {
@@ -140,7 +140,7 @@
       flex-shrink:0; white-space:nowrap; display:flex; align-items:center; gap:3px;
     }
     .search-store-chip {
-      flex-shrink:0; height:26px; padding:0 12px;
+      flex-shrink:0; height:26px; padding:0 12px; line-height:23px;
       border-radius:13px; border:1.5px solid var(--border);
       background: var(--white); color: var(--muted);
       font-family:'DM Sans',sans-serif; font-size:12px; font-weight:600;
