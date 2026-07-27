@@ -1662,6 +1662,10 @@ async function syncCatalogue(silent = false) {
         quantity:  1,
         notes:     '',
         fromSheet: true,   // mark as Sheet-managed
+        // Carry over this device's usage tally — without this, every
+        // refresh would silently reset "most used" ranking to zero.
+        storeCounts: (existing && existing.storeCounts) ? existing.storeCounts : {},
+        useCount:    existing ? existing.useCount : undefined,
       };
       if (existing) updated++; else added++;
       sheetItems.push(entry);
@@ -1751,6 +1755,50 @@ function itemScore(item, ctx) {
   }
   const total = Object.values(sc).reduce((a, b) => a + b, 0);
   return total || item.useCount || 0; // useCount = fallback for pre-existing data
+}
+
+// Rebuild this device's own ranking from the Sheet's Selections log.
+// Runs once per app load, after the catalogue sync (so store names are
+// already up to date). This makes ranking self-healing — even if local
+// storage is ever cleared or reset, it recovers straight from the Sheet,
+// using only rows that belong to THIS device's ID.
+async function restoreHistoryFromSheet() {
+  if (!APPS_SCRIPT_URL || APPS_SCRIPT_URL === 'YOUR_APPS_SCRIPT_URL_HERE') return;
+  try {
+    const res  = await fetch(APPS_SCRIPT_URL + '?action=getDeviceHistory&deviceId=' + encodeURIComponent(DEVICE_ID));
+    const data = await res.json();
+    if (data.error || !Array.isArray(data.history) || !data.history.length) return;
+
+    const storeIdMap = {};
+    S.stores.forEach(s => { storeIdMap[s.name.toLowerCase()] = s.id; });
+
+    if (!S.savedItems) S.savedItems = [];
+    let changed = false;
+
+    data.history.forEach(h => {
+      const name = (h.name || '').trim();
+      if (!name) return;
+      const storeKey = (h.store || '').trim().toLowerCase();
+      const storeId  = (!storeKey || storeKey === 'any') ? 'any' : (storeIdMap[storeKey] || 'any');
+
+      let entry = S.savedItems.find(s => s.name.toLowerCase() === name.toLowerCase());
+      if (!entry) {
+        entry = { id: uid(), name, category: 'Other', store: storeId, price: 0, quantity: 1, notes: '', fromSheet: false, storeCounts: {} };
+        S.savedItems.unshift(entry);
+      }
+      if (!entry.storeCounts) entry.storeCounts = {};
+      // Take the higher of what's already local vs what the Sheet has —
+      // never lets a count go backwards, just fills in what's missing.
+      if (h.count > (entry.storeCounts[storeId] || 0)) {
+        entry.storeCounts[storeId] = h.count;
+        changed = true;
+      }
+    });
+
+    if (changed) { save(); render(); }
+  } catch (err) {
+    console.warn('Could not restore ranking history from Sheet:', err);
+  }
 }
 
 // ═══════════════════════════════════════════════════════════
@@ -4867,9 +4915,13 @@ init();
 initTabletUI();
 render();
 
-// Auto-sync catalogue from Google Sheets on every open (silent)
+// Auto-sync catalogue from Google Sheets on every open (silent),
+// then rebuild this device's ranking from its own selection history.
 if (APPS_SCRIPT_URL && APPS_SCRIPT_URL !== 'YOUR_APPS_SCRIPT_URL_HERE') {
-  setTimeout(() => syncCatalogue(true), 600);
+  setTimeout(async () => {
+    await syncCatalogue(true);
+    restoreHistoryFromSheet();
+  }, 600);
 }
 </script>
 </body>
