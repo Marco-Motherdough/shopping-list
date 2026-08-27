@@ -76,6 +76,18 @@
     }
     .icon-btn:active { background: var(--cream-dark); }
     .icon-btn.accent { background: var(--amber); color: #fff; }
+    .device-btn {
+      display:flex; align-items:center; gap:5px;
+      background: var(--cream-mid); border:none; cursor:pointer;
+      padding: 0 12px; height:40px; border-radius: 20px;
+      font-family:'DM Sans',sans-serif; font-size:12px; font-weight:600;
+      color: var(--dark); max-width:120px; flex-shrink:0;
+    }
+    .device-btn:active { background: var(--cream-dark); }
+    .device-btn-ico { font-size:13px; flex-shrink:0; }
+    .device-btn-label {
+      white-space:nowrap; overflow:hidden; text-overflow:ellipsis;
+    }
 
     /* ── MAIN ──────────────────────────────────────────── */
     .main {
@@ -949,6 +961,9 @@
     </button>
   </div>
   <div class="hdr-right">
+    <button class="device-btn" id="hdrDeviceBtn" title="This device's ID — tap to change">
+      <span class="device-btn-ico">📱</span><span class="device-btn-label" id="hdrDeviceId">Set ID</span>
+    </button>
     <button class="icon-btn" id="exportBtn" title="Export">⬆️</button>
     <button class="icon-btn" id="storesBtn" title="Manage stores">🏪</button>
     <button class="icon-btn" id="catMgmtBtn" title="Manage categories">🏷️</button>
@@ -1065,6 +1080,29 @@
       </label>
       <button class="btn-primary" id="saveItemBtn">Save Item</button>
       <button class="btn-sec btn-danger" id="deleteItemBtn" style="display:none">Delete Item</button>
+    </div>
+  </div>
+</div>
+
+<!-- MODAL: Device ID (gate on first run, editable afterwards) -->
+<div class="overlay" id="deviceIdOverlay">
+  <div class="sheet">
+    <div class="sheet-handle"></div>
+    <div class="sheet-hdr">
+      <h2 class="sheet-title">👋 Who's this device?</h2>
+      <button class="sheet-close" id="deviceIdClose">✕</button>
+    </div>
+    <div class="sheet-body">
+      <p style="font-size:13px;color:var(--text-soft,#888);margin:0 0 14px;line-height:1.5;">
+        Give this device or person a short ID (e.g. "Kitchen iPad" or "Mom's phone").
+        It's saved on this device so you only type it once — every list you save
+        will be tagged with it.
+      </p>
+      <div class="f-group">
+        <label class="f-label">Device ID *</label>
+        <input class="f-input" id="deviceIdInput" type="text" placeholder="e.g. Kitchen iPad" autocomplete="off" maxlength="40" />
+      </div>
+      <button class="btn-primary" id="deviceIdSaveBtn">Save & Continue</button>
     </div>
   </div>
 </div>
@@ -1487,31 +1525,21 @@ const DEF_STORES = ['Checkers','Pick n Pay','Woolworths','Spar'];
 const SK = 'shopList_v2';
 
 // ── DEVICE IDENTITY (so each device gets its own predictive ranking) ──
-// The ID/name live in this browser's localStorage — they persist across
-// sessions on this device, but are never shared with other devices.
-// They're only used (a) to keep this device's own use-counts, and
-// (b) as a label in the Sheet's "Selections" log so it's readable.
-const DK_ID = 'shopDeviceId', DK_NAME = 'shopDeviceName';
-const NAME_ADJ = ['Amber','Cedar','Willow','Sage','Clover','Hazel','Juniper','Rowan','Basil','Coral','Indigo','Marigold'];
-const NAME_NOUN = ['Fox','Otter','Heron','Sparrow','Falcon','Badger','Lynx','Robin','Finch','Hare','Wren','Swift'];
-function getOrCreateDeviceId() {
-  let id = localStorage.getItem(DK_ID);
-  if (!id) {
-    id = Date.now().toString(36) + Math.random().toString(36).slice(2,10) + Math.random().toString(36).slice(2,10);
-    localStorage.setItem(DK_ID, id);
-  }
-  return id;
+// The user types their own ID once (e.g. "Kitchen iPad", "Mom's phone").
+// It's saved in this browser's localStorage so it survives refreshes and
+// re-opens — you only ever type it once per device. It's used (a) to keep
+// this device's own use-counts, and (b) as the label in the Sheet's
+// "Selections" / history logs so entries are readable and groupable by
+// device/person.
+const DK_ID = 'shopDeviceId';
+let DEVICE_ID = (localStorage.getItem(DK_ID) || '').trim();
+
+function setDeviceId(val) {
+  DEVICE_ID = String(val || '').trim();
+  try { localStorage.setItem(DK_ID, DEVICE_ID); } catch(e) {}
+  const badge = document.getElementById('hdrDeviceId');
+  if (badge) badge.textContent = DEVICE_ID;
 }
-function getOrCreateDeviceName() {
-  let name = localStorage.getItem(DK_NAME);
-  if (!name) {
-    name = NAME_ADJ[Math.floor(Math.random()*NAME_ADJ.length)] + ' ' + NAME_NOUN[Math.floor(Math.random()*NAME_NOUN.length)];
-    localStorage.setItem(DK_NAME, name);
-  }
-  return name;
-}
-const DEVICE_ID   = getOrCreateDeviceId();
-const DEVICE_NAME = getOrCreateDeviceName();
 
 // ═══════════════════════════════════════════════════════════
 // STATE
@@ -1710,6 +1738,36 @@ async function logSelectionToSheet(payload) {
   }
 }
 
+// ── SAVE A COMPLETED SHOP (fires when you tap "Clear ticked") ──
+// This is the moment a shop is "done" — everything ticked is what was
+// actually bought. It's logged to the Sheet's "PurchaseHistory" tab as
+// one row per item (with quantity + line total), tagged with the date,
+// ISO week, and this device's ID, so a weekly forecast can be built
+// straight off that tab later.
+async function logPurchaseToSheet(items, listName) {
+  if (!APPS_SCRIPT_URL || APPS_SCRIPT_URL === 'YOUR_APPS_SCRIPT_URL_HERE') return;
+  if (!items || !items.length) return;
+  try {
+    await fetch(APPS_SCRIPT_URL, {
+      method: 'POST',
+      body: JSON.stringify({
+        action: 'savePurchase',
+        deviceId: DEVICE_ID,
+        listName: listName || '',
+        items: items.map(i => ({
+          name:     i.name,
+          category: i.category || 'Other',
+          store:    (i.store === 'any' || !i.store) ? 'Any' : storeName(i.store),
+          quantity: i.quantity || 1,
+          price:    i.price || 0,
+        })),
+      }),
+    });
+  } catch (err) {
+    console.warn('Purchase log did not reach the Sheet (offline?):', err);
+  }
+}
+
 function trackSelection(d) {
   if (!d || !d.name) return;
 
@@ -1737,7 +1795,7 @@ function trackSelection(d) {
 
   logSelectionToSheet({
     deviceId:   DEVICE_ID,
-    deviceName: DEVICE_NAME,
+    deviceName: DEVICE_ID,
     item:       d.name,
     category:   d.category || 'Other',
     store:      storeCtx === 'any' ? 'Any' : storeName(storeCtx),
@@ -1854,7 +1912,9 @@ function dupItem(id) {
 }
 function clearTicked() {
   const l = activeList(); if (!l) return;
-  const n = l.items.filter(i => i.ticked).length;
+  const bought = l.items.filter(i => i.ticked);
+  const n = bought.length;
+  if (n) logPurchaseToSheet(bought, l.name);
   l.items = l.items.filter(i => !i.ticked); save(); render();
   toast(`Cleared ${n} ticked item${n!==1?'s':''}`);
 }
@@ -4908,20 +4968,64 @@ function init() {
 }
 
 // ═══════════════════════════════════════════════════════════
+// DEVICE ID GATE
+// ═══════════════════════════════════════════════════════════
+// On a brand new device/browser there's no saved ID yet, so we block
+// with the deviceIdOverlay and only boot the rest of the app once one
+// is entered. On every later visit DEVICE_ID is already in
+// localStorage, so this is skipped entirely and the app just opens.
+function initDeviceIdModal() {
+  document.getElementById('deviceIdClose').addEventListener('click', () => {
+    if (!DEVICE_ID) { toast('Please enter a device ID to continue'); return; }
+    closeOverlay('deviceIdOverlay');
+  });
+  document.getElementById('deviceIdOverlay').addEventListener('click', e => {
+    if (e.target.id === 'deviceIdOverlay' && DEVICE_ID) closeOverlay('deviceIdOverlay');
+  });
+  document.getElementById('hdrDeviceBtn').addEventListener('click', () => {
+    document.getElementById('deviceIdInput').value = DEVICE_ID;
+    openOverlay('deviceIdOverlay');
+    setTimeout(() => document.getElementById('deviceIdInput').focus(), 300);
+  });
+
+  function submit() {
+    const val = document.getElementById('deviceIdInput').value.trim();
+    if (!val) { toast('Please enter a device ID'); return; }
+    const firstRun = !DEVICE_ID;
+    setDeviceId(val);
+    closeOverlay('deviceIdOverlay');
+    toast(firstRun ? `Welcome, ${val}!` : 'Device ID updated');
+    if (firstRun) startApp();
+  }
+  document.getElementById('deviceIdSaveBtn').addEventListener('click', submit);
+  document.getElementById('deviceIdInput').addEventListener('keydown', e => { if (e.key === 'Enter') submit(); });
+}
+
+// ═══════════════════════════════════════════════════════════
 // BOOT
 // ═══════════════════════════════════════════════════════════
-load();
-init();
-initTabletUI();
-render();
+function startApp() {
+  load();
+  init();
+  initTabletUI();
+  render();
 
-// Auto-sync catalogue from Google Sheets on every open (silent),
-// then rebuild this device's ranking from its own selection history.
-if (APPS_SCRIPT_URL && APPS_SCRIPT_URL !== 'YOUR_APPS_SCRIPT_URL_HERE') {
-  setTimeout(async () => {
-    await syncCatalogue(true);
-    restoreHistoryFromSheet();
-  }, 600);
+  // Auto-sync catalogue from Google Sheets on every open (silent),
+  // then rebuild this device's ranking from its own selection history.
+  if (APPS_SCRIPT_URL && APPS_SCRIPT_URL !== 'YOUR_APPS_SCRIPT_URL_HERE') {
+    setTimeout(async () => {
+      await syncCatalogue(true);
+      restoreHistoryFromSheet();
+    }, 600);
+  }
+}
+
+initDeviceIdModal();
+if (DEVICE_ID) {
+  document.getElementById('hdrDeviceId').textContent = DEVICE_ID;
+  startApp();
+} else {
+  openOverlay('deviceIdOverlay');
 }
 </script>
 </body>
