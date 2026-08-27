@@ -1546,7 +1546,7 @@ function getCATS()           { return getCats().map(c=>c.name); }
 
 // ── GOOGLE SHEETS INTEGRATION ──────────────────────────────
 // Paste your deployed Apps Script URL here (one time, stays forever):
-const APPS_SCRIPT_URL = 'https://script.google.com/macros/s/AKfycbxO4sU63cW76Jnkf7HaWb0wjDOKxcOEQBcZr36pwR26dbSPDbcAtBO4H7E-bLIvr8hw4Q/exec';
+const APPS_SCRIPT_URL = 'https://script.google.com/macros/s/AKfycbzq4n2xzyVXtZC4vp8G1xIboj4te6-SqBfc9y4SBt_7vtXFkSenUVGCm3s7UGW10LQFuw/exec';
 
 const DEF_STORES = ['Checkers','Pick n Pay','Woolworths','Spar'];
 const SK = 'shopList_v2';
@@ -2879,6 +2879,9 @@ function rForecastResults() {
   h += `<div id="forecastItems">`;
   data.predictedItems.forEach(it => {
     const cc = catColor(it.category) || '#888';
+    const priceTag = it.priceSource === 'history'
+      ? '<span title="Not in Catalogue \u2014 using historical average price" style="font-size:10px;color:var(--muted)">hist.</span>'
+      : '';
     h += `<div class="lib-item">
       <div class="lib-item-strip" style="background:${cc}"></div>
       <div class="lib-item-body">
@@ -2886,7 +2889,7 @@ function rForecastResults() {
         <div class="lib-item-meta">×${it.predictedQty} · ${esc(it.category)}${it.store && it.store !== 'Any' ? ' · ' + esc(it.store) : ''}</div>
       </div>
       <span class="freq-badge">${it.bucketsBought}/${data.totalBuckets}</span>
-      <div class="lib-item-price">${R(it.predictedCost)}</div>
+      <div class="lib-item-price">${R(it.predictedCost)} ${priceTag}</div>
       <button class="lib-add-btn" data-fc="${esc(it.name)}" title="Add to list">+</button>
     </div>`;
   });
