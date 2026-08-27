@@ -497,6 +497,29 @@
       cursor:pointer; flex-shrink:0; transition: background .12s;
     }
     .lib-add-btn:active { background: var(--amber-dark); }
+    /* ── FORECAST VIEW ─────────────────────────────────────── */
+    .forecast-summary {
+      display:flex; justify-content:space-between; align-items:center;
+      background: var(--cream-mid); border-radius: var(--r-md);
+      padding:14px 16px; margin:12px 0;
+    }
+    .forecast-summary-label { font-size:12px; color:var(--muted); font-weight:600; text-transform:uppercase; letter-spacing:.05em; }
+    .forecast-summary-value { font-family:'Playfair Display',serif; font-size:24px; font-weight:700; color:var(--dark); margin-top:2px; }
+    .freq-badge {
+      font-size:11px; font-weight:600; color:var(--sage); background:rgba(90,122,92,.13);
+      padding:2px 8px; border-radius:10px; flex-shrink:0; white-space:nowrap;
+    }
+    .spend-row { display:flex; align-items:center; gap:10px; padding:6px 0; }
+    .spend-week { font-size:11px; color:var(--muted); width:78px; flex-shrink:0; }
+    .spend-bar-wrap { flex:1; background:var(--cream-mid); border-radius:6px; height:10px; overflow:hidden; }
+    .spend-bar { height:100%; background:var(--amber); border-radius:6px; }
+    .spend-total { font-size:12px; font-weight:600; width:66px; text-align:right; flex-shrink:0; }
+    .fc-device-row {
+      display:flex; align-items:center; gap:10px; padding:8px 4px;
+      border-bottom:1px solid var(--border);
+    }
+    .fc-device-row:last-of-type { border-bottom:none; }
+    .fc-device-row label { font-size:14px; flex:1; }
     .lib-del-btn {
       background:none; border:none; color:var(--muted);
       font-size:16px; width:30px; height:30px;
@@ -1004,6 +1027,7 @@
   <div id="storeView" style="display:none"></div>
   <div id="summaryView" class="summary-pad" style="display:none"></div>
   <div id="libraryView" style="display:none"></div>
+  <div id="forecastView" style="display:none"></div>
   <div id="orderView" style="display:none"></div>
   <div id="bakeryView" style="display:none"></div>
 </main>
@@ -1022,6 +1046,9 @@
   </button>
   <button class="nav-btn" data-view="library">
     <span class="nav-ico">⭐</span><span class="nav-lbl">Library</span>
+  </button>
+  <button class="nav-btn" data-view="forecast">
+    <span class="nav-ico">🔮</span><span class="nav-lbl">Forecast</span>
   </button>
   <div class="sidebar-totals" style="display:none" id="sidebarTotals">
     <div class="sidebar-totals-row">
@@ -1519,7 +1546,7 @@ function getCATS()           { return getCats().map(c=>c.name); }
 
 // ── GOOGLE SHEETS INTEGRATION ──────────────────────────────
 // Paste your deployed Apps Script URL here (one time, stays forever):
-const APPS_SCRIPT_URL = 'https://script.google.com/macros/s/AKfycbxqgp1M2tUlgl8U5N6g-1i-eQ9I8AxMDLYnRUvQHad3zl5KVfbPe6_FWYN6XDC9_KAcng/exec';
+const APPS_SCRIPT_URL = 'https://script.google.com/macros/s/AKfycbxO4sU63cW76Jnkf7HaWb0wjDOKxcOEQBcZr36pwR26dbSPDbcAtBO4H7E-bLIvr8hw4Q/exec';
 
 const DEF_STORES = ['Checkers','Pick n Pay','Woolworths','Spar'];
 const SK = 'shopList_v2';
@@ -1877,6 +1904,11 @@ function storeName(sid) {
   const s = S.stores.find(s => s.id === sid);
   return s ? s.name : '?';
 }
+function storeIdByName(name) {
+  if (!name || /^any/i.test(name)) return 'any';
+  const s = S.stores.find(s => s.name.toLowerCase() === String(name).toLowerCase());
+  return s ? s.id : 'any';
+}
 const R = n => 'R ' + (n||0).toFixed(2);
 const lineTotal = i => i.price * i.quantity;
 
@@ -1956,7 +1988,7 @@ function deleteStore(id) {
 // ═══════════════════════════════════════════════════════════
 function render() {
   rHeader(); rFilterBar(); rSearchStoreBar(); rTotals(); rNav();
-  const views = { list:'listView', bystore:'storeView', summary:'summaryView', library:'libraryView', order:'orderView', bakery:'bakeryView' };
+  const views = { list:'listView', bystore:'storeView', summary:'summaryView', library:'libraryView', forecast:'forecastView', order:'orderView', bakery:'bakeryView' };
   Object.entries(views).forEach(([v,id]) => {
     document.getElementById(id).style.display = S.view === v ? '' : 'none';
   });
@@ -1976,6 +2008,7 @@ function render() {
   if (S.view === 'bystore') rStoreView();
   if (S.view === 'summary') rSummaryView();
   if (S.view === 'library') rLibraryView();
+  if (S.view === 'forecast') rForecastView();
   if (S.view === 'order')   rOrderView();
   if (S.view === 'bakery')  rBakeryView();
 }
@@ -1984,6 +2017,7 @@ function rHeader() {
   const l = activeList();
   if (S.view === 'order')  document.getElementById('hdrListName').textContent = '📦 Weekly Orders';
   else if (S.view === 'bakery') document.getElementById('hdrListName').textContent = '🥖 Bakery';
+  else if (S.view === 'forecast') document.getElementById('hdrListName').textContent = '🔮 Forecast';
   else document.getElementById('hdrListName').textContent = l ? l.name : 'My List';
 }
 
@@ -2609,6 +2643,299 @@ function rManagePanel() {
       toast(`Deleted ${grpItems.length} ${label} items`);
     });
   });
+}
+
+// ── FORECAST VIEW ──────────────────────────────────────────
+// PIN-gated (see forecastUnlocked / openPinModal in nav click below).
+// Lets you pick which device(s) to include, a HISTORY date range to
+// learn from, and a TARGET date range to forecast for (any length —
+// not just a week). "Run forecast" calls the Apps Script's
+// getForecast action with those params and shows predicted items,
+// a predicted total, and a spend-per-period history strip.
+let forecastUnlocked = false;
+let forecastMeta = null;          // { devices, earliest, latest } from getForecastMeta
+let forecastMetaLoading = false;
+let forecastResult = null;        // last getForecast response
+let forecastRunning = false;
+let forecastError = null;
+let forecastSelectedDevices = null; // Set of device ids; null = "all" (not yet initialised)
+
+async function fetchForecastMeta() {
+  if (!APPS_SCRIPT_URL || APPS_SCRIPT_URL === 'YOUR_APPS_SCRIPT_URL_HERE') return;
+  forecastMetaLoading = true;
+  rForecastView();
+  try {
+    const res  = await fetch(APPS_SCRIPT_URL + '?action=getForecastMeta');
+    const data = await res.json();
+    forecastMeta = data;
+    if (!forecastSelectedDevices) forecastSelectedDevices = new Set(data.devices || []);
+  } catch (err) {
+    console.warn('Forecast meta fetch failed:', err);
+    forecastMeta = { devices: [], earliest: '', latest: '' };
+  } finally {
+    forecastMetaLoading = false;
+    rForecastView();
+  }
+}
+
+function todayYMD(offsetDays) {
+  const d = new Date();
+  d.setDate(d.getDate() + (offsetDays || 0));
+  return d.toISOString().slice(0, 10);
+}
+
+function rForecastView() {
+  const container = document.getElementById('forecastView');
+  if (!container) return;
+
+  // First render: build the static control shell once, then never
+  // rebuild it on re-render (so date/checkbox values don't get wiped
+  // out while a forecast is running) — only the results panel updates.
+  if (!container.querySelector('#fcControls')) {
+    container.innerHTML = `<div class="lib-pad">
+      <h2>🔮 Forecast</h2>
+      <p class="lib-sub">Pick devices and date ranges, then run the forecast.</p>
+      <div id="fcControls">
+        <div class="f-group">
+          <label class="f-label">Devices</label>
+          <div id="fcDeviceList"><p class="empty-sub">Loading devices…</p></div>
+        </div>
+        <div class="f-row">
+          <div class="f-group">
+            <label class="f-label">History from</label>
+            <input class="f-input" type="date" id="fcHistFrom" />
+          </div>
+          <div class="f-group">
+            <label class="f-label">History to</label>
+            <input class="f-input" type="date" id="fcHistTo" />
+          </div>
+        </div>
+        <div class="f-row">
+          <div class="f-group">
+            <label class="f-label">Forecast from</label>
+            <input class="f-input" type="date" id="fcTargetFrom" />
+          </div>
+          <div class="f-group">
+            <label class="f-label">Forecast to</label>
+            <input class="f-input" type="date" id="fcTargetTo" />
+          </div>
+        </div>
+        <button class="btn-primary" id="fcRunBtn" style="margin-top:6px">🔮 Run forecast</button>
+      </div>
+      <div id="forecastResults"></div>
+    </div>`;
+
+    document.getElementById('fcTargetFrom').value = todayYMD(0);
+    document.getElementById('fcTargetTo').value   = todayYMD(6);
+    document.getElementById('fcRunBtn').addEventListener('click', runForecast);
+
+    fetchForecastMeta();
+  }
+
+  rForecastDevices();
+  rForecastResults();
+}
+
+function rForecastDevices() {
+  const list = document.getElementById('fcDeviceList');
+  if (!list) return;
+
+  if (forecastMetaLoading && !forecastMeta) {
+    list.innerHTML = `<p class="empty-sub">Loading devices…</p>`;
+    return;
+  }
+  if (!forecastMeta || !forecastMeta.devices || forecastMeta.devices.length === 0) {
+    list.innerHTML = `<p class="empty-sub">No completed shops logged yet — nothing to forecast from.</p>`;
+    return;
+  }
+
+  // Default the history range from the data span, only the first time.
+  const histFrom = document.getElementById('fcHistFrom');
+  const histTo   = document.getElementById('fcHistTo');
+  if (histFrom && !histFrom.value) histFrom.value = forecastMeta.earliest || todayYMD(-30);
+  if (histTo   && !histTo.value)   histTo.value   = forecastMeta.latest   || todayYMD(0);
+
+  let h = '';
+  forecastMeta.devices.forEach(d => {
+    const checked = forecastSelectedDevices && forecastSelectedDevices.has(d) ? 'checked' : '';
+    h += `<div class="fc-device-row">
+      <input type="checkbox" data-fcdevice="${esc(d)}" ${checked} />
+      <label>${esc(d)}</label>
+    </div>`;
+  });
+  list.innerHTML = h;
+  list.querySelectorAll('[data-fcdevice]').forEach(cb => {
+    cb.addEventListener('change', () => {
+      if (!forecastSelectedDevices) forecastSelectedDevices = new Set();
+      if (cb.checked) forecastSelectedDevices.add(cb.dataset.fcdevice);
+      else forecastSelectedDevices.delete(cb.dataset.fcdevice);
+    });
+  });
+}
+
+async function runForecast() {
+  if (!APPS_SCRIPT_URL || APPS_SCRIPT_URL === 'YOUR_APPS_SCRIPT_URL_HERE') {
+    forecastError = 'Apps Script URL not set.';
+    rForecastResults();
+    return;
+  }
+  const historyStart = document.getElementById('fcHistFrom')?.value || '';
+  const historyEnd   = document.getElementById('fcHistTo')?.value   || '';
+  const targetStart  = document.getElementById('fcTargetFrom')?.value || todayYMD(0);
+  const targetEnd    = document.getElementById('fcTargetTo')?.value   || todayYMD(6);
+  const deviceIds    = forecastSelectedDevices ? Array.from(forecastSelectedDevices) : [];
+
+  if (deviceIds.length === 0) {
+    toast('Select at least one device');
+    return;
+  }
+
+  forecastRunning = true;
+  forecastError = null;
+  rForecastResults();
+
+  try {
+    const qs = new URLSearchParams({
+      action: 'getForecast',
+      deviceIds: deviceIds.join(','),
+      historyStart, historyEnd, targetStart, targetEnd,
+    });
+    const res  = await fetch(APPS_SCRIPT_URL + '?' + qs.toString());
+    const data = await res.json();
+    if (data.error) throw new Error(data.error);
+    forecastResult = data;
+  } catch (err) {
+    forecastError = 'Could not run forecast (offline, or Apps Script not redeployed yet).';
+    console.warn('Forecast run failed:', err);
+  } finally {
+    forecastRunning = false;
+    rForecastResults();
+  }
+}
+
+function rForecastResults() {
+  const container = document.getElementById('forecastResults');
+  if (!container) return;
+
+  if (forecastRunning) {
+    container.innerHTML = `<div class="empty" style="padding:40px 0">
+      <div class="empty-ico">🔮</div>
+      <h2 class="empty-ttl">Crunching the numbers…</h2>
+    </div>`;
+    return;
+  }
+
+  if (forecastError) {
+    container.innerHTML = `<div class="empty" style="padding:40px 0">
+      <div class="empty-ico">⚠️</div>
+      <h2 class="empty-ttl">Couldn't run forecast</h2>
+      <p class="empty-sub">${esc(forecastError)}</p>
+    </div>`;
+    return;
+  }
+
+  if (!forecastResult) {
+    container.innerHTML = `<div class="empty" style="padding:40px 0">
+      <p class="empty-sub">Set your options above and tap <strong>Run forecast</strong>.</p>
+    </div>`;
+    return;
+  }
+
+  const data = forecastResult;
+
+  if (!data.items || data.items.length === 0) {
+    container.innerHTML = `<div class="empty" style="padding:40px 0">
+      <div class="empty-ico">🔮</div>
+      <h2 class="empty-ttl">No purchases in that range</h2>
+      <p class="empty-sub">Try widening the history dates or selecting more devices.</p>
+    </div>`;
+    return;
+  }
+
+  let h = '';
+
+  if (data.insufficientData) {
+    h += `<div class="empty" style="padding:16px 14px;text-align:left">
+      <p class="empty-sub">Not much history in that range yet (only ${data.totalBuckets} period${data.totalBuckets !== 1 ? 's' : ''} of ${data.targetDays}-day length) — predictions get reliable with 2+ periods. Showing everything seen so far as an early preview.</p>
+    </div>`;
+  }
+
+  h += `<div class="forecast-summary">
+    <div>
+      <div class="forecast-summary-label">Predicted items</div>
+      <div class="forecast-summary-value">${data.predictedItems.length}</div>
+    </div>
+    <div style="text-align:right">
+      <div class="forecast-summary-label">Predicted cost</div>
+      <div class="forecast-summary-value">${R(data.predictedTotal)}</div>
+    </div>
+  </div>`;
+  h += `<p class="lib-sub">For ${esc(data.targetStart)} → ${esc(data.targetEnd)}, learned from ${esc(data.historyStart)} → ${esc(data.historyEnd)}.</p>`;
+
+  if (data.predictedItems.length) {
+    h += `<button class="lib-transfer-btn primary" id="forecastAddAllBtn" style="width:100%;justify-content:center;margin:10px 0">➕ Add all predicted items to list</button>`;
+  }
+
+  h += `<div id="forecastItems">`;
+  data.predictedItems.forEach(it => {
+    const cc = catColor(it.category) || '#888';
+    h += `<div class="lib-item">
+      <div class="lib-item-strip" style="background:${cc}"></div>
+      <div class="lib-item-body">
+        <div class="lib-item-name">${esc(it.name)}</div>
+        <div class="lib-item-meta">×${it.predictedQty} · ${esc(it.category)}${it.store && it.store !== 'Any' ? ' · ' + esc(it.store) : ''}</div>
+      </div>
+      <span class="freq-badge">${it.bucketsBought}/${data.totalBuckets}</span>
+      <div class="lib-item-price">${R(it.predictedCost)}</div>
+      <button class="lib-add-btn" data-fc="${esc(it.name)}" title="Add to list">+</button>
+    </div>`;
+  });
+  h += `</div>`;
+
+  if (data.bucketSpend && data.bucketSpend.length) {
+    const maxSpend = Math.max(...data.bucketSpend, 1);
+    h += `<h2 style="margin-top:22px">Spend History (${data.targetDays}-day periods)</h2>`;
+    data.bucketSpend.slice(-10).forEach((total, i) => {
+      const pct = Math.max(4, Math.round((total / maxSpend) * 100));
+      h += `<div class="spend-row">
+        <span class="spend-week">Period ${i + 1}</span>
+        <div class="spend-bar-wrap"><div class="spend-bar" style="width:${pct}%"></div></div>
+        <span class="spend-total">${R(total)}</span>
+      </div>`;
+    });
+  }
+
+  container.innerHTML = h;
+
+  container.querySelector('#forecastAddAllBtn')?.addEventListener('click', addAllForecastItems);
+  container.querySelectorAll('[data-fc]').forEach(b => {
+    b.addEventListener('click', () => addForecastItemByName(b.dataset.fc));
+  });
+}
+
+function addForecastItemByName(name) {
+  if (!forecastResult) return;
+  const it = forecastResult.predictedItems.find(x => x.name === name) || forecastResult.items.find(x => x.name === name);
+  if (!it) return;
+  addForecastItem(it);
+  toast(`Added ${it.predictedQty}× ${it.name}`);
+}
+
+function addForecastItem(it) {
+  addItem({
+    name: it.name,
+    category: it.category || 'Other',
+    store: storeIdByName(it.store),
+    price: it.avgUnitPrice || 0,
+    quantity: it.predictedQty || 1,
+  });
+}
+
+function addAllForecastItems() {
+  if (!forecastResult || !forecastResult.predictedItems.length) return;
+  forecastResult.predictedItems.forEach(addForecastItem);
+  toast(`Added ${forecastResult.predictedItems.length} predicted items to your list`);
+  S.view = 'list'; save(); render();
 }
 
 // ── AUTOCOMPLETE ───────────────────────────────────────────
@@ -4879,7 +5206,12 @@ function init() {
 
   // Nav
   document.querySelectorAll('.nav-btn').forEach(b=>b.addEventListener('click',()=>{
-    if (b.dataset.view) { S.view = b.dataset.view; save(); render(); }
+    if (!b.dataset.view) return;
+    if (b.dataset.view === 'forecast' && !forecastUnlocked) {
+      openPinModal(() => { forecastUnlocked = true; S.view = 'forecast'; save(); render(); });
+      return;
+    }
+    S.view = b.dataset.view; save(); render();
   }));
 
   // Item modal
