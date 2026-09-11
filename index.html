@@ -1912,6 +1912,14 @@ function storeIdByName(name) {
 const R = n => 'R ' + (n||0).toFixed(2);
 const lineTotal = i => i.price * i.quantity;
 
+// Stores whose items count toward the grand total in exports (detailed & multi-store).
+// Items from any other store (incl. "Any Store") still print, but aren't summed.
+const EXPORT_TOTAL_STORES = ['checkers', 'woolworths', 'pick n pay'];
+function isExportTotalStore(item) {
+  const sn = item.store && item.store !== 'any' ? storeName(item.store) : '';
+  return EXPORT_TOTAL_STORES.includes(sn.toLowerCase());
+}
+
 // ═══════════════════════════════════════════════════════════
 // ACTIONS
 // ═══════════════════════════════════════════════════════════
@@ -4888,7 +4896,7 @@ function buildMultiStoreExport() {
 
   lists.forEach(l => {
     const items = (l.items || []).filter(i => !i.ticked);
-    const tot   = items.reduce((s, i) => s + lineTotal(i), 0);
+    const tot   = items.filter(isExportTotalStore).reduce((s, i) => s + lineTotal(i), 0);
     grandTotal += tot;
 
     txt += `📍 ${l.name.toUpperCase()}\n`;
@@ -4922,11 +4930,11 @@ function buildMultiStoreExport() {
     }
 
     txt += `${'─'.repeat(28)}\n`;
-    txt += `  Subtotal: ${R(tot)}\n\n`;
+    txt += `  Subtotal (Checkers/Woolworths/Pick n Pay only): ${R(tot)}\n\n`;
   });
 
   txt += `${'═'.repeat(36)}\n`;
-  txt += `GRAND TOTAL (${lists.length} store${lists.length !== 1 ? 's' : ''}): ${R(grandTotal)}`;
+  txt += `GRAND TOTAL (${lists.length} list${lists.length !== 1 ? 's' : ''}, Checkers/Woolworths/Pick n Pay only): ${R(grandTotal)}`;
 
   // Show the textarea
   const ta   = document.getElementById('exportTA');
@@ -4961,8 +4969,8 @@ function buildDetailedExport() {
     txt += '\n';
   });
 
-  const tot = items.reduce((s,i)=>s+lineTotal(i),0);
-  txt += `${'─'.repeat(32)}\nEst. total (${items.length} item${items.length!==1?'s':''}): ${R(tot)}`;
+  const tot = items.filter(isExportTotalStore).reduce((s,i)=>s+lineTotal(i),0);
+  txt += `${'─'.repeat(32)}\nEst. total (${items.length} item${items.length!==1?'s':''}, Checkers/Woolworths/Pick n Pay only): ${R(tot)}`;
   return txt;
 }
 
