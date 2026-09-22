@@ -2102,6 +2102,7 @@ function rListView() {
 
   let h = '<div class="items-pad">';
   // Group unticked by category
+  const catNames = new Set(getCats().map(c => c.name));
   getCats().forEach(({name:cat, color:catColorVal}) => {
     const ci = unticked.filter(i => i.category === cat);
     if (!ci.length) return;
@@ -2114,6 +2115,20 @@ function rListView() {
     ci.forEach(item => { h += itemCard(item); });
     h += `</div>`;
   });
+
+  // Items whose category no longer exists (e.g. it was deleted) — still show them
+  // instead of letting them vanish while still counting toward the totals.
+  const orphaned = unticked.filter(i => !catNames.has(i.category));
+  if (orphaned.length) {
+    h += `<div class="cat-group">
+      <div class="cat-hdr">
+        <div class="cat-dot" style="background:#888888"></div>
+        <span class="cat-label">Uncategorized</span>
+        <span class="cat-count">${orphaned.length}</span>
+      </div>`;
+    orphaned.forEach(item => { h += itemCard(item); });
+    h += `</div>`;
+  }
 
   // Ticked section
   if (ticked.length) {
@@ -2188,12 +2203,20 @@ function rSummaryView() {
 
   // By category
   let catRows = '';
+  const catNames = new Set(getCats().map(c => c.name));
   getCats().forEach(({name:cat, color:catColorVal}) => {
     const ci = unticked.filter(i=>i.category===cat);
     if (!ci.length) return;
     const tot = ci.reduce((acc,i)=>acc+lineTotal(i),0);
     catRows += `<div class="sum-row"><span class="sum-lbl"><div style="width:8px;height:8px;border-radius:50%;background:${catColorVal};display:inline-block;margin-right:6px"></div>${cat}</span><span class="sum-val">${R(tot)}</span></div>`;
   });
+  // Items whose category no longer exists (e.g. it was deleted) — still show them
+  // instead of letting them vanish from the breakdown while still counting toward the total.
+  const orphanedCat = unticked.filter(i => !catNames.has(i.category));
+  if (orphanedCat.length) {
+    const tot = orphanedCat.reduce((acc,i)=>acc+lineTotal(i),0);
+    catRows += `<div class="sum-row"><span class="sum-lbl"><div style="width:8px;height:8px;border-radius:50%;background:#888888;display:inline-block;margin-right:6px"></div>Uncategorized</span><span class="sum-val">${R(tot)}</span></div>`;
+  }
   if (!catRows) catRows = `<div class="sum-row"><span class="sum-lbl" style="color:var(--muted)">No items yet</span></div>`;
 
   container.innerHTML = `
@@ -4652,9 +4675,14 @@ function rCatMgmt() {
       const cats = getCats();
       if (cats.length <= 1) { toast('Need at least one category'); return; }
       const name = cats[idx].name;
-      if (!confirm(`Delete category "${name}"? Items with this category will show no category.`)) return;
+      const fallback = cats.find((c,i2) => i2 !== idx)?.name || 'Other';
+      if (!confirm(`Delete category "${name}"? Items with this category will be moved to "${fallback}".`)) return;
       if (!S.categories || !S.categories.length) S.categories = [...DEFAULT_CATS];
       S.categories.splice(idx, 1);
+      // Reassign items across every list (and the library) so nothing is left
+      // pointing at a category that no longer exists.
+      (S.lists || []).forEach(l => (l.items || []).forEach(i => { if (i.category === name) i.category = fallback; }));
+      (S.savedItems || []).forEach(i => { if (i.category === name) i.category = fallback; });
       save(); rCatMgmt();
       // Re-populate any open selects
       populateItemSelects();
