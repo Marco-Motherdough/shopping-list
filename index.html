@@ -1913,12 +1913,12 @@ const R = n => 'R ' + (n||0).toFixed(2);
 const lineTotal = i => i.price * i.quantity;
 
 // Stores whose items count toward the grand total in exports (detailed & multi-store).
-// "Any Store" items count too; only items pinned to some OTHER named store (e.g. Spar,
-// or a custom store) are excluded and print without being summed.
+// Items from any other store (incl. unassigned "Any Store" items) still print, but
+// aren't summed.
 const EXPORT_TOTAL_STORES = ['checkers', 'woolworths', 'pick n pay'];
 function isExportTotalStore(item) {
-  if (!item.store || item.store === 'any') return true;
-  return EXPORT_TOTAL_STORES.includes(storeName(item.store).toLowerCase());
+  const sn = item.store && item.store !== 'any' ? storeName(item.store) : '';
+  return EXPORT_TOTAL_STORES.includes(sn.toLowerCase());
 }
 
 // ═══════════════════════════════════════════════════════════
@@ -4959,11 +4959,11 @@ function buildMultiStoreExport() {
     }
 
     txt += `${'─'.repeat(28)}\n`;
-    txt += `  Subtotal (Checkers/Woolworths/Pick n Pay/Any Store only): ${R(tot)}\n\n`;
+    txt += `  Subtotal (Checkers/Woolworths/Pick n Pay only): ${R(tot)}\n\n`;
   });
 
   txt += `${'═'.repeat(36)}\n`;
-  txt += `GRAND TOTAL (${lists.length} list${lists.length !== 1 ? 's' : ''}, Checkers/Woolworths/Pick n Pay/Any Store only): ${R(grandTotal)}`;
+  txt += `GRAND TOTAL (${lists.length} list${lists.length !== 1 ? 's' : ''}, Checkers/Woolworths/Pick n Pay only): ${R(grandTotal)}`;
 
   // Show the textarea
   const ta   = document.getElementById('exportTA');
@@ -4999,7 +4999,7 @@ function buildDetailedExport() {
   });
 
   const tot = items.filter(isExportTotalStore).reduce((s,i)=>s+lineTotal(i),0);
-  txt += `${'─'.repeat(32)}\nEst. total (${items.length} item${items.length!==1?'s':''}, Checkers/Woolworths/Pick n Pay/Any Store only): ${R(tot)}`;
+  txt += `${'─'.repeat(32)}\nEst. total (${items.length} item${items.length!==1?'s':''}, Checkers/Woolworths/Pick n Pay only): ${R(tot)}`;
   return txt;
 }
 
