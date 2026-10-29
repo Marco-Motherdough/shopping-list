@@ -4355,6 +4355,10 @@ function openOrderLibEditModal(libId) {
   document.getElementById('oSize').value = entry.size || '';
   document.getElementById('oPrice').value = entry.price || '';
   document.getElementById('oQty').value = '1';
+  // orderLibOverlay is still open underneath and, being later in the DOM at the
+  // same z-index, paints on top of this sheet — close it first or the edit
+  // modal opens invisibly behind the library list.
+  closeOverlay('orderLibOverlay');
   openOverlay('orderItemOverlay');
   setTimeout(() => document.getElementById('oName').focus(), 350);
 }
@@ -4382,6 +4386,7 @@ function saveOrderItemModal() {
     toast('Library item updated');
     closeOverlay('orderItemOverlay');
     rOrderLibrarySheet();
+    openOverlay('orderLibOverlay');
     return;
   }
 
@@ -5331,7 +5336,11 @@ function init() {
 
   // Overlay backdrop tap to close
   ['itemOverlay','listOverlay','storeOverlay','exportOverlay','orderItemOverlay','supplierOverlay','pinOverlay','orderLibOverlay','oLibQtyOverlay','libEditOverlay','bkItemOverlay','bkSupItemOverlay','bkSuppliersOverlay','catMgmtOverlay','bkQtyOverlay'].forEach(id=>{
-    document.getElementById(id).addEventListener('click',e=>{if(e.target.id===id)closeOverlay(id);});
+    document.getElementById(id).addEventListener('click',e=>{
+      if (e.target.id !== id) return;
+      closeOverlay(id);
+      if (id === 'orderItemOverlay' && document.getElementById('oLibEditId').value) openOverlay('orderLibOverlay');
+    });
   });
 
   document.getElementById('catMgmtClose').addEventListener('click', () => closeOverlay('catMgmtOverlay'));
@@ -5377,12 +5386,21 @@ function init() {
   document.getElementById('libEditName').addEventListener('keydown', e => { if (e.key === 'Enter') saveLibEdit(); });
 
   // Order item modal
-  document.getElementById('orderItemClose').addEventListener('click', ()=>closeOverlay('orderItemOverlay'));
+  document.getElementById('orderItemClose').addEventListener('click', ()=>{
+    const wasLibEdit = document.getElementById('oLibEditId').value;
+    closeOverlay('orderItemOverlay');
+    if (wasLibEdit) openOverlay('orderLibOverlay');
+  });
   document.getElementById('saveOrderItemBtn').addEventListener('click', saveOrderItemModal);
   document.getElementById('deleteOrderItemBtn').addEventListener('click', ()=>{
     const libEditId = document.getElementById('oLibEditId').value;
     if (libEditId) {
-      if (confirm('Remove this item from the order library?')) { deleteFromOrderLibrary(libEditId); closeOverlay('orderItemOverlay'); toast('Removed from library'); }
+      if (confirm('Remove this item from the order library?')) {
+        deleteFromOrderLibrary(libEditId);
+        closeOverlay('orderItemOverlay');
+        openOverlay('orderLibOverlay');
+        toast('Removed from library');
+      }
       return;
     }
     const id = document.getElementById('oEditId').value;
