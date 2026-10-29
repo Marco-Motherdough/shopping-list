@@ -1400,6 +1400,7 @@
     <div class="sheet-body">
       <input type="hidden" id="oEditId" />
       <input type="hidden" id="oSupplierId" />
+      <input type="hidden" id="oLibEditId" />
       <div class="f-group">
         <label class="f-label">Item Name *</label>
         <input class="f-input" id="oName" type="text" placeholder="e.g. Flour 5kg" autocomplete="off" />
@@ -1423,13 +1424,13 @@
           <label class="f-label">Price (R)</label>
           <input class="f-input" id="oPrice" type="number" min="0" step="0.01" placeholder="0.00" inputmode="decimal" />
         </div>
-        <div class="f-group">
+        <div class="f-group" id="oQtyGroup">
           <label class="f-label">Quantity</label>
           <input class="f-input" id="oQty" type="number" min="1" step="1" value="1" inputmode="numeric" />
         </div>
       </div>
       <button class="btn-primary" id="saveOrderItemBtn">Save Item</button>
-      <label class="save-to-lib-row" style="margin-top:10px">
+      <label class="save-to-lib-row" style="margin-top:10px" id="oSaveToLibRow">
         <input type="checkbox" id="oSaveToLib" />
         <span class="save-to-lib-label">⭐ Save to order library for quick reuse</span>
       </label>
@@ -4149,6 +4150,7 @@ function rOrderLibrarySheet() {
             ${item.price > 0 ? `<span style="font-size:11px;color:var(--muted)">${R(item.price)}</span>` : ''}
           </div>
         </div>
+        <button class="order-item-edit" data-olibedit="${item.id}" title="Edit">✎</button>
         <button class="lib-add-btn" data-olibid="${item.id}" title="Add to order">+</button>
         <button class="lib-del-btn" data-olibdel="${item.id}" title="Remove">✕</button>
       </div>`;
@@ -4160,6 +4162,10 @@ function rOrderLibrarySheet() {
   body.querySelectorAll('[data-olibid]').forEach(b => b.addEventListener('click', e => {
     e.stopPropagation();
     openOrderLibQtyPicker(b.dataset.olibid);
+  }));
+  body.querySelectorAll('[data-olibedit]').forEach(b => b.addEventListener('click', e => {
+    e.stopPropagation();
+    openOrderLibEditModal(b.dataset.olibedit);
   }));
   body.querySelectorAll('[data-olibdel]').forEach(b => b.addEventListener('click', e => {
     e.stopPropagation();
@@ -4300,6 +4306,9 @@ function populateSupplierSelect(selectedId) {
 }
 function openOrderItemModal(supplierId=null, editId=null) {
   document.getElementById('oEditId').value = editId || '';
+  document.getElementById('oLibEditId').value = '';
+  document.getElementById('oQtyGroup').style.display = '';
+  document.getElementById('oSaveToLibRow').style.display = '';
   document.getElementById('orderItemTitle').textContent = editId ? 'Edit Order Item' : 'Add Order Item';
   document.getElementById('deleteOrderItemBtn').style.display = editId ? '' : 'none';
 
@@ -4329,12 +4338,53 @@ function openOrderItemModal(supplierId=null, editId=null) {
     : false;
   document.getElementById('oSaveToLib').checked = inLib;
 }
+// Edit a library entry directly (S.orderLibrary), not this week's order —
+// so fixing a price/SKU there doesn't require removing and re-adding it.
+function openOrderLibEditModal(libId) {
+  const entry = (S.orderLibrary||[]).find(x => x.id === libId);
+  if (!entry) return;
+  document.getElementById('oEditId').value = '';
+  document.getElementById('oLibEditId').value = libId;
+  document.getElementById('orderItemTitle').textContent = 'Edit Library Item';
+  document.getElementById('deleteOrderItemBtn').style.display = '';
+  document.getElementById('oQtyGroup').style.display = 'none';
+  document.getElementById('oSaveToLibRow').style.display = 'none';
+  populateSupplierSelect(entry.supplierId);
+  document.getElementById('oName').value = entry.name;
+  document.getElementById('oSku').value = entry.sku || '';
+  document.getElementById('oSize').value = entry.size || '';
+  document.getElementById('oPrice').value = entry.price || '';
+  document.getElementById('oQty').value = '1';
+  openOverlay('orderItemOverlay');
+  setTimeout(() => document.getElementById('oName').focus(), 350);
+}
+function updateOrderLibraryItem(id, d) {
+  const idx = (S.orderLibrary||[]).findIndex(x => x.id === id); if (idx < 0) return;
+  S.orderLibrary[idx] = { ...S.orderLibrary[idx], ...d }; save();
+}
 function saveOrderItemModal() {
+  const libEditId = document.getElementById('oLibEditId').value;
   const editId = document.getElementById('oEditId').value;
   const name = document.getElementById('oName').value.trim();
   if (!name) { document.getElementById('oName').focus(); return; }
   const supplierId = document.getElementById('oSupplier').value;
   if (!supplierId) { toast('Please add a supplier first'); return; }
+
+  if (libEditId) {
+    const d = {
+      supplierId,
+      name,
+      sku:   document.getElementById('oSku').value.trim(),
+      size:  document.getElementById('oSize').value.trim(),
+      price: parseFloat(document.getElementById('oPrice').value) || 0,
+    };
+    updateOrderLibraryItem(libEditId, d);
+    toast('Library item updated');
+    closeOverlay('orderItemOverlay');
+    rOrderLibrarySheet();
+    return;
+  }
+
   const d = {
     supplierId,
     name,
@@ -5330,6 +5380,11 @@ function init() {
   document.getElementById('orderItemClose').addEventListener('click', ()=>closeOverlay('orderItemOverlay'));
   document.getElementById('saveOrderItemBtn').addEventListener('click', saveOrderItemModal);
   document.getElementById('deleteOrderItemBtn').addEventListener('click', ()=>{
+    const libEditId = document.getElementById('oLibEditId').value;
+    if (libEditId) {
+      if (confirm('Remove this item from the order library?')) { deleteFromOrderLibrary(libEditId); closeOverlay('orderItemOverlay'); toast('Removed from library'); }
+      return;
+    }
     const id = document.getElementById('oEditId').value;
     if (id && confirm('Delete this order item?')) { deleteOrderItem(id); closeOverlay('orderItemOverlay'); toast('Item deleted'); }
   });
