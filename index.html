@@ -1603,7 +1603,7 @@ function mkItem(d) {
     name: (d.name||'').trim(),
     category: d.category||'Other',
     store: d.store||'any',
-    price: parseFloat(d.price)||0,
+    price: parseMoney(d.price),
     quantity: parseInt(d.quantity)||1,
     notes: (d.notes||'').trim(),
     ticked: false,
@@ -1706,7 +1706,7 @@ async function syncCatalogue(silent = false) {
       const name     = (item.name || '').trim(); if (!name) return;
       const category = (item.category || 'Other').trim();
       const storeId  = storeIdMap[(item.store || '').toLowerCase()] || 'any';
-      const price    = parseFloat(item.price) || 0;
+      const price    = parseMoney(item.price);
 
       // Preserve ID if this item already existed as a Sheet item
       const existing = S.savedItems.find(s => s.fromSheet === true && s.name.toLowerCase() === name.toLowerCase());
@@ -1912,6 +1912,15 @@ function storeIdByName(name) {
 }
 const R = n => 'R ' + (n||0).toFixed(2);
 const lineTotal = i => i.price * i.quantity;
+
+// Parses a price that may use a comma as the decimal separator (e.g. "15,50") —
+// a common habit in South Africa. Plain parseFloat() stops at the comma and
+// silently drops everything after it, undercharging by the cents.
+function parseMoney(val) {
+  if (typeof val === 'number') return isNaN(val) ? 0 : val;
+  const n = parseFloat(String(val == null ? '' : val).trim().replace(',', '.'));
+  return isNaN(n) ? 0 : n;
+}
 
 // Stores whose items count toward the grand total in exports (detailed & multi-store).
 // Items from any other store (incl. unassigned "Any Store" items) still print, but
@@ -2387,7 +2396,7 @@ function saveLibEdit() {
     name,
     category: document.getElementById('libEditCat').value,
     store:    document.getElementById('libEditStore').value,
-    price:    parseFloat(document.getElementById('libEditPrice').value) || 0,
+    price:    parseMoney(document.getElementById('libEditPrice').value),
     quantity: parseInt(document.getElementById('libEditQty').value) || 1,
     notes:    document.getElementById('libEditNotes').value.trim(),
   };
@@ -3616,7 +3625,7 @@ function saveBkItemModal() {
   const d = {
     name,
     category: document.getElementById('bkItemCategory').value || '',
-    price:    parseFloat(document.getElementById('bkItemPrice').value)||0,
+    price:    parseMoney(document.getElementById('bkItemPrice').value),
     quantity: parseInt(document.getElementById('bkItemQty').value)||1,
     notes:    document.getElementById('bkItemNotes').value.trim(),
   };
@@ -3849,7 +3858,7 @@ function saveBkSupItemModal() {
     supplierId: supId, name,
     sku:      document.getElementById('bkSupItemSku').value.trim(),
     size:     document.getElementById('bkSupItemSize').value.trim(),
-    price:    parseFloat(document.getElementById('bkSupItemPrice').value)||0,
+    price:    parseMoney(document.getElementById('bkSupItemPrice').value),
     quantity: parseInt(document.getElementById('bkSupItemQty').value)||1,
   };
   if (isLib) {
@@ -3926,7 +3935,7 @@ function mkOrderItem(d) {
     name: (d.name||'').trim(),
     sku: (d.sku||'').trim(),
     size: (d.size||'').trim(),
-    price: parseFloat(d.price)||0,
+    price: parseMoney(d.price),
     quantity: parseInt(d.quantity)||1,
     createdAt: Date.now(),
   };
@@ -4380,7 +4389,7 @@ function saveOrderItemModal() {
       name,
       sku:   document.getElementById('oSku').value.trim(),
       size:  document.getElementById('oSize').value.trim(),
-      price: parseFloat(document.getElementById('oPrice').value) || 0,
+      price: parseMoney(document.getElementById('oPrice').value),
     };
     updateOrderLibraryItem(libEditId, d);
     toast('Library item updated');
@@ -4395,7 +4404,7 @@ function saveOrderItemModal() {
     name,
     sku:      document.getElementById('oSku').value.trim(),
     size:     document.getElementById('oSize').value.trim(),
-    price:    parseFloat(document.getElementById('oPrice').value) || 0,
+    price:    parseMoney(document.getElementById('oPrice').value),
     quantity: parseInt(document.getElementById('oQty').value) || 1,
   };
   if (document.getElementById('oSaveToLib').checked) {
@@ -4806,7 +4815,7 @@ function saveItemModal() {
     name,
     category: document.getElementById('fCat').value,
     store:    document.getElementById('fStore').value,
-    price:    parseFloat(document.getElementById('fPrice').value)||0,
+    price:    parseMoney(document.getElementById('fPrice').value),
     quantity: parseInt(document.getElementById('fQty').value)||1,
     notes:    document.getElementById('fNotes').value.trim(),
   };
