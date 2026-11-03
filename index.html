@@ -947,7 +947,7 @@
     .df-cell { display:flex; flex-direction:column; gap:3px; min-width:0; }
     .df-cell > span { font-size:10px; font-weight:600; text-transform:uppercase; letter-spacing:.05em; color:var(--muted); }
     .df-in { height:38px; padding:0 8px; font-size:15px; }
-    .df-order.overridden { border-color:var(--amber); }
+    .df-order.overridden, .df-opt.overridden { border-color:var(--amber); }
     .df-val { height:38px; display:flex; align-items:center; font-size:15px; font-weight:600; }
     .df-row-foot { font-size:11px; color:var(--muted); margin-top:6px; }
     .df-warn {
@@ -5309,6 +5309,7 @@ function distriState() {
   d.stock = d.stock || {};
   d.buffer = d.buffer || {};
   d.orderOverride = d.orderOverride || {};
+  d.optimalOverride = d.optimalOverride || {};
   d.perDay = d.perDay || {};
   d.forecastAt = d.forecastAt || '';
   d.since = d.since || '';
@@ -5337,14 +5338,18 @@ function distriCalc(item) {
   const perDay = d.perDay[k] || 0;
   const buf = typeof d.buffer[k] === 'number' ? d.buffer[k] : d.defaultBuffer;
   const usage = perDay * d.coverDays;
-  const optimal = perDay > 0 ? Math.ceil(usage * (1 + buf / 100)) : 0;
+  const forecastOptimal = perDay > 0 ? Math.ceil(usage * (1 + buf / 100)) : 0;
+  // A manually set optimal level wins over the forecast.
+  const hasOptimalOverride = typeof d.optimalOverride[k] === 'number';
+  const optimal = hasOptimalOverride ? d.optimalOverride[k] : forecastOptimal;
+  const hasOptimal = hasOptimalOverride || perDay > 0;
   const hasStock = typeof d.stock[k] === 'number';
   // No suggestion until stock has been counted — otherwise an uncounted item
   // would silently order its full optimal level.
   const suggested = hasStock ? Math.max(0, optimal - d.stock[k]) : 0;
   const hasOverride = typeof d.orderOverride[k] === 'number';
   const qty = hasOverride ? d.orderOverride[k] : suggested;
-  return { k, perDay, buf, usage, optimal, hasStock, suggested, hasOverride, qty, line: qty * (item.price || 0) };
+  return { k, perDay, buf, usage, forecastOptimal, hasOptimalOverride, optimal, hasOptimal, hasStock, suggested, hasOverride, qty, line: qty * (item.price || 0) };
 }
 
 function distriOrderLines() {
@@ -5426,7 +5431,8 @@ function distriRowHtml(item) {
       <label class="df-cell"><span>Buffer %</span>
         <input class="f-input df-in" data-f="buffer" type="number" min="0" step="1" inputmode="numeric" placeholder="${d.defaultBuffer}"
           value="${typeof d.buffer[k] === 'number' ? d.buffer[k] : ''}"></label>
-      <div class="df-cell"><span>Optimal</span><div class="df-val" data-out="optimal"></div></div>
+      <label class="df-cell"><span>Optimal</span>
+        <input class="f-input df-in df-opt" data-f="optimal" type="number" min="0" step="1" inputmode="numeric"></label>
       <label class="df-cell"><span>Order</span>
         <input class="f-input df-in df-order" data-f="order" type="number" min="0" step="1" inputmode="numeric"></label>
     </div>
@@ -5437,7 +5443,10 @@ function distriRowHtml(item) {
 function updateDistriRow(row, item) {
   const d = distriState();
   const r = distriCalc(item);
-  row.querySelector('[data-out="optimal"]').textContent = r.perDay > 0 ? r.optimal : '—';
+  const opt = row.querySelector('.df-opt');
+  if (document.activeElement !== opt) opt.value = r.hasOptimal ? r.optimal : '';
+  opt.placeholder = r.perDay > 0 ? String(r.forecastOptimal) : '—';
+  opt.classList.toggle('overridden', r.hasOptimalOverride);
   row.querySelector('[data-f="buffer"]').placeholder = d.defaultBuffer;
   const ord = row.querySelector('.df-order');
   if (document.activeElement !== ord) ord.value = r.hasOverride ? r.qty : (r.hasStock ? r.suggested : '');
@@ -5446,8 +5455,9 @@ function updateDistriRow(row, item) {
   row.classList.toggle('needs-order', r.qty > 0);
   const foot = [];
   if (r.perDay > 0) foot.push(`Uses ~${fmtQty(r.usage)} per ${d.coverDays} day${d.coverDays !== 1 ? 's' : ''}`);
-  else foot.push('No purchase history yet — set the order qty manually');
-  if (r.hasOverride && r.hasStock && r.perDay > 0) foot.push(`suggested ${r.suggested}`);
+  else if (!r.hasOptimalOverride) foot.push('No purchase history yet — set the optimal level');
+  if (r.hasOptimalOverride && r.perDay > 0) foot.push(`forecast optimal ${r.forecastOptimal}`);
+  if (r.hasOverride && r.hasStock && r.hasOptimal) foot.push(`suggested ${r.suggested}`);
   if (r.qty > 0 && item.price > 0) foot.push(`line ${R(r.line)}`);
   row.querySelector('[data-out="foot"]').textContent = foot.join(' · ');
 }
@@ -5534,7 +5544,7 @@ function rDistriView() {
     updateDistriRow(row, item);
     row.querySelectorAll('.df-in').forEach(inp => {
       inp.addEventListener('input', () => {
-        const map = inp.dataset.f === 'stock' ? d.stock : inp.dataset.f === 'buffer' ? d.buffer : d.orderOverride;
+        const map = { stock: d.stock, buffer: d.buffer, optimal: d.optimalOverride, order: d.orderOverride }[inp.dataset.f];
         const v = inp.value.trim();
         if (v === '') delete map[k];
         else {
