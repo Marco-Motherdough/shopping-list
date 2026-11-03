@@ -5457,7 +5457,9 @@ function updateDistriRow(row, item) {
   if (r.perDay > 0) foot.push(`Uses ~${fmtQty(r.usage)} per ${d.coverDays} day${d.coverDays !== 1 ? 's' : ''}`);
   else if (!r.hasOptimalOverride) foot.push('No purchase history yet — set the optimal level');
   if (r.hasOptimalOverride && r.perDay > 0) foot.push(`forecast optimal ${r.forecastOptimal}`);
-  if (r.hasOverride && r.hasStock && r.hasOptimal) foot.push(`suggested ${r.suggested}`);
+  if (r.hasOverride && r.hasStock && r.hasOptimal && r.qty !== r.suggested) {
+    foot.push(`manual order qty — suggested ${r.suggested} (clear the box to use it)`);
+  }
   if (r.qty > 0 && item.price > 0) foot.push(`line ${R(r.line)}`);
   row.querySelector('[data-out="foot"]').textContent = foot.join(' · ');
 }
@@ -5551,6 +5553,9 @@ function rDistriView() {
           const n = Math.max(0, parseMoney(v));
           map[k] = inp.dataset.f === 'buffer' ? n : Math.round(n);
         }
+        // New stock/optimal/buffer means the suggestion should take over again,
+        // rather than a stale hand-typed order qty silently winning.
+        if (inp.dataset.f !== 'order') delete d.orderOverride[k];
         save();
         updateDistriRow(row, item);
         rDistriSummary();
