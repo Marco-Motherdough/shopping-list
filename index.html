@@ -931,6 +931,30 @@
     .olib-item-name { font-size:14px; font-weight:500; color:var(--dark); white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
     .olib-item-meta { display:flex; gap:6px; flex-wrap:wrap; margin-top:3px; align-items:center; }
 
+    /* ── DISTRIFOODS ORDERS ────────────────────────────────── */
+    .df-delivery { font-size:14px; margin-bottom:12px; }
+    .df-status { font-size:12px; color:var(--muted); margin-top:10px; line-height:1.5; }
+    .df-search { width:100%; margin:4px 0 10px; }
+    .df-row {
+      background:var(--white); border-radius:var(--r); box-shadow:var(--shadow);
+      padding:10px 12px; margin-bottom:8px; border-left:4px solid transparent;
+    }
+    .df-row.needs-order { border-left-color:var(--amber); }
+    .df-row-top { display:flex; justify-content:space-between; gap:10px; align-items:baseline; }
+    .df-name { font-size:15px; font-weight:500; min-width:0; overflow-wrap:anywhere; }
+    .df-price { font-size:13px; color:var(--muted); white-space:nowrap; }
+    .df-grid { display:grid; grid-template-columns:repeat(4, minmax(0,1fr)); gap:8px; margin-top:8px; }
+    .df-cell { display:flex; flex-direction:column; gap:3px; min-width:0; }
+    .df-cell > span { font-size:10px; font-weight:600; text-transform:uppercase; letter-spacing:.05em; color:var(--muted); }
+    .df-in { height:38px; padding:0 8px; font-size:15px; }
+    .df-order.overridden { border-color:var(--amber); }
+    .df-val { height:38px; display:flex; align-items:center; font-size:15px; font-weight:600; }
+    .df-row-foot { font-size:11px; color:var(--muted); margin-top:6px; }
+    .df-warn {
+      background:rgba(184,90,58,.1); color:var(--rust); border-radius:var(--r-sm);
+      padding:10px 14px; font-size:13px; font-weight:600; margin-top:10px;
+    }
+
     /* ── PIN MODAL ─────────────────────────────────────────── */
     .pin-dots {
       display:flex; justify-content:center; gap:16px; margin-bottom:6px;
@@ -1030,6 +1054,7 @@
   <div id="forecastView" style="display:none"></div>
   <div id="orderView" style="display:none"></div>
   <div id="bakeryView" style="display:none"></div>
+  <div id="distriView" style="display:none"></div>
 </main>
 
 <!-- BOTTOM NAV / SIDEBAR -->
@@ -1483,16 +1508,36 @@
   </div>
 </div>
 
+<!-- MODAL: Distrifoods order email -->
+<div class="overlay" id="distriEmailOverlay">
+  <div class="sheet">
+    <div class="sheet-handle"></div>
+    <div class="sheet-hdr">
+      <h2 class="sheet-title">✉️ Distri Foods Order</h2>
+      <button class="sheet-close" id="distriEmailClose">✕</button>
+    </div>
+    <div class="sheet-body">
+      <div class="f-group">
+        <label class="f-label">Subject</label>
+        <input class="f-input" id="distriEmailSubject" type="text" />
+      </div>
+      <textarea class="export-ta" id="distriEmailTA"></textarea>
+      <button class="btn-primary" id="distriEmailCopyBtn">Copy to Clipboard</button>
+      <button class="btn-sec" id="distriEmailOpenBtn">Open in email app</button>
+    </div>
+  </div>
+</div>
+
 <!-- MODAL: PIN -->
 <div class="overlay" id="pinOverlay">
   <div class="sheet" style="max-height:auto" onclick="event.stopPropagation()">
     <div class="sheet-handle"></div>
     <div class="sheet-hdr">
-      <h2 class="sheet-title">🔒 Weekly Orders</h2>
+      <h2 class="sheet-title" id="pinTitle">🔒 Weekly Orders</h2>
       <button class="sheet-close" id="pinClose">✕</button>
     </div>
     <div class="sheet-body" style="text-align:center; padding-bottom:36px">
-      <p style="font-size:14px; color:var(--muted); margin-bottom:22px">Enter your PIN to access Weekly Orders</p>
+      <p style="font-size:14px; color:var(--muted); margin-bottom:22px" id="pinSub">Enter your PIN to access Weekly Orders</p>
       <div class="pin-dots" id="pinDots">
         <div class="pin-dot" id="pd0"></div>
         <div class="pin-dot" id="pd1"></div>
@@ -1624,6 +1669,8 @@ function load() {
       S = { ...S, ...JSON.parse(raw) };
       // Migrate: rename "Weekly Shop" → "Shopping List"
       S.lists.forEach(l => { if (l.name === 'Weekly Shop') l.name = 'Shopping List'; });
+      // Distrifoods Orders is PIN-gated — never reopen it straight after a reload.
+      if (S.view === 'distri') S.view = 'list';
       save();
       return;
     }
@@ -2007,17 +2054,18 @@ function deleteStore(id) {
 // ═══════════════════════════════════════════════════════════
 function render() {
   rHeader(); rFilterBar(); rSearchStoreBar(); rTotals(); rNav();
-  const views = { list:'listView', bystore:'storeView', summary:'summaryView', library:'libraryView', forecast:'forecastView', order:'orderView', bakery:'bakeryView' };
+  const views = { list:'listView', bystore:'storeView', summary:'summaryView', library:'libraryView', forecast:'forecastView', order:'orderView', bakery:'bakeryView', distri:'distriView' };
   Object.entries(views).forEach(([v,id]) => {
     document.getElementById(id).style.display = S.view === v ? '' : 'none';
   });
   const isOrder  = S.view === 'order';
   const isBakery = S.view === 'bakery';
-  const isSpecial = isOrder || isBakery;
+  const isSpecial = isOrder || isBakery || S.view === 'distri';
   const showBar = (S.view === 'list' || S.view === 'bystore') && !isSpecial;
   document.querySelector('.quick-add-wrap').style.display = showBar ? '' : 'none';
   document.getElementById('filterBar').style.display = showBar ? '' : 'none';
   document.getElementById('searchStoreBar').style.display = showBar ? '' : 'none';
+  document.getElementById('totalsBar').style.display = S.view === 'distri' ? 'none' : '';
   document.getElementById('exportBtn').style.display = isSpecial ? 'none' : '';
   document.getElementById('storesBtn').style.display = isSpecial ? 'none' : '';
   document.getElementById('catMgmtBtn').style.display = isSpecial ? 'none' : '';
@@ -2030,12 +2078,14 @@ function render() {
   if (S.view === 'forecast') rForecastView();
   if (S.view === 'order')   rOrderView();
   if (S.view === 'bakery')  rBakeryView();
+  if (S.view === 'distri')  rDistriView();
 }
 
 function rHeader() {
   const l = activeList();
   if (S.view === 'order')  document.getElementById('hdrListName').textContent = '📦 Weekly Orders';
   else if (S.view === 'bakery') document.getElementById('hdrListName').textContent = '🥖 Bakery';
+  else if (S.view === 'distri') document.getElementById('hdrListName').textContent = '🚚 Distrifoods Orders';
   else if (S.view === 'forecast') document.getElementById('hdrListName').textContent = '🔮 Forecast';
   else document.getElementById('hdrListName').textContent = l ? l.name : 'My List';
 }
@@ -4846,13 +4896,18 @@ function rListModal() {
       <span class="list-row-name" style="font-weight:600;">Bakery</span>
       ${S.view==='bakery' ? '<span class="list-row-active">✓</span>' : '<span style="color:var(--amber);font-size:18px">→</span>'}
     </div>
+    <div class="list-row" id="distriRow" style="cursor:pointer; ${S.view==='distri'?'background:rgba(184,115,51,0.08);border-radius:8px;padding:10px 8px;':'padding:10px 8px;'}">
+      <span style="font-size:18px;">🚚</span>
+      <span class="list-row-name" style="font-weight:600;">Distrifoods Orders</span>
+      ${S.view==='distri' ? '<span class="list-row-active">✓</span>' : '<span style="color:var(--amber);font-size:18px">→</span>'}
+    </div>
   </div>`;
 
   // Shopping lists
   h += `<div style="padding:0 0 6px"><label class="f-label">Shopping Lists</label></div>`;
+  const inSpecial = isOrderView || S.view === 'bakery' || S.view === 'distri';
   S.lists.forEach(l => {
-    const isActive = l.id === S.activeListId && !isOrderView && S.view !== 'bakery';
-    const inSpecial = isOrderView || S.view === 'bakery';
+    const isActive = l.id === S.activeListId && !inSpecial;
     h += `<div class="list-row">
       <span class="list-row-name">${esc(l.name)}</span>
       ${isActive ? '<span class="list-row-active">✓</span>' : ''}
@@ -4876,6 +4931,12 @@ function rListModal() {
   // Bakery click (no PIN)
   document.getElementById('bakeryRow').addEventListener('click', () => {
     S.view = 'bakery'; save(); closeOverlay('listOverlay'); render();
+  });
+
+  // Distrifoods Orders click (own PIN)
+  document.getElementById('distriRow').addEventListener('click', () => {
+    closeOverlay('listOverlay');
+    openPinModal(() => { S.view = 'distri'; save(); render(); fetchDistriForecast(); }, DISTRI_PIN, 'Distrifoods Orders');
   });
 
   body.querySelectorAll('[data-a="sw-list"]').forEach(b=>b.addEventListener('click',()=>{
@@ -5223,15 +5284,405 @@ function uploadSuppliers(event) {
 }
 
 // ═══════════════════════════════════════════════════════════
+// DISTRIFOODS ORDERS
+// ═══════════════════════════════════════════════════════════
+// Every catalogue item whose store is "Distri Foods". For each one:
+//   optimal = forecast usage per day × cover days × (1 + buffer %)
+//   order   = optimal − counted stock   (or a manual override)
+// Usage per day comes from the Apps Script getForecast action
+// (PurchaseHistory across all devices), so changing cover days or
+// buffer doesn't need a refetch.
+const DISTRI_PIN = '2580';
+const DISTRI_MIN_ORDER = 500;
+const DISTRI_CUTOFF_HOUR = 8;
+
+let distriForecastLoading = false;
+let distriForecastError = '';
+let distriFilter = '';
+
+function distriState() {
+  if (!S.distri) S.distri = {};
+  const d = S.distri;
+  if (!(d.coverDays > 0)) d.coverDays = 7;
+  if (typeof d.defaultBuffer !== 'number') d.defaultBuffer = 20;
+  if (typeof d.supplierEmail !== 'string') d.supplierEmail = '';
+  d.stock = d.stock || {};
+  d.buffer = d.buffer || {};
+  d.orderOverride = d.orderOverride || {};
+  d.perDay = d.perDay || {};
+  d.forecastAt = d.forecastAt || '';
+  return d;
+}
+
+const distriKey = item => item.name.trim().toLowerCase();
+const fmtQty = n => String(Math.round(n * 10) / 10);
+
+function isDistriStore(storeId) {
+  if (!storeId || storeId === 'any') return false;
+  return storeName(storeId).toLowerCase().replace(/\s+/g, '') === 'distrifoods';
+}
+
+function distriItems() {
+  const seen = new Set();
+  return (S.savedItems || [])
+    .filter(i => isDistriStore(i.store))
+    .filter(i => { const k = distriKey(i); if (seen.has(k)) return false; seen.add(k); return true; })
+    .sort((a, b) => a.name.localeCompare(b.name));
+}
+
+function distriCalc(item) {
+  const d = distriState();
+  const k = distriKey(item);
+  const perDay = d.perDay[k] || 0;
+  const buf = typeof d.buffer[k] === 'number' ? d.buffer[k] : d.defaultBuffer;
+  const usage = perDay * d.coverDays;
+  const optimal = perDay > 0 ? Math.ceil(usage * (1 + buf / 100)) : 0;
+  const hasStock = typeof d.stock[k] === 'number';
+  // No suggestion until stock has been counted — otherwise an uncounted item
+  // would silently order its full optimal level.
+  const suggested = hasStock ? Math.max(0, optimal - d.stock[k]) : 0;
+  const hasOverride = typeof d.orderOverride[k] === 'number';
+  const qty = hasOverride ? d.orderOverride[k] : suggested;
+  return { k, perDay, buf, usage, optimal, hasStock, suggested, hasOverride, qty, line: qty * (item.price || 0) };
+}
+
+function distriOrderLines() {
+  return distriItems().map(item => ({ item, ...distriCalc(item) })).filter(x => x.qty > 0);
+}
+
+// Deliveries Mon–Fri. Ordered before 08:00 on a weekday → same day;
+// otherwise the next weekday (so Fri after 08:00, Sat and Sun → Monday).
+function distriDeliveryDate(now = new Date()) {
+  const d = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+  const day = d.getDay();
+  if (day >= 1 && day <= 5 && now.getHours() < DISTRI_CUTOFF_HOUR) return d;
+  do { d.setDate(d.getDate() + 1); } while (d.getDay() === 0 || d.getDay() === 6);
+  return d;
+}
+function fmtDeliveryDate(d) {
+  return d.toLocaleDateString('en-ZA', { weekday:'long', day:'numeric', month:'long' });
+}
+function distriDeliveryNote(now = new Date()) {
+  const del = distriDeliveryDate(now);
+  if (del.toDateString() === now.toDateString()) {
+    return `🚚 Order before 08:00 → delivery <strong>today</strong>`;
+  }
+  return `🚚 Order now → delivery <strong>${fmtDeliveryDate(del)}</strong>`;
+}
+
+async function fetchDistriForecast() {
+  if (!APPS_SCRIPT_URL || APPS_SCRIPT_URL === 'YOUR_APPS_SCRIPT_URL_HERE') return;
+  const d = distriState();
+  distriForecastLoading = true;
+  distriForecastError = '';
+  rDistriStatus();
+  try {
+    const qs = new URLSearchParams({ action:'getForecast', targetStart: todayYMD(0), targetEnd: todayYMD(d.coverDays - 1) });
+    const res  = await fetch(APPS_SCRIPT_URL + '?' + qs.toString());
+    const data = await res.json();
+    if (data.error) throw new Error(data.error);
+    const wanted = new Set(distriItems().map(distriKey));
+    const histDays = Math.max(1, data.historyDays || 1);
+    const perDay = {};
+    (data.items || []).forEach(it => {
+      const k = String(it.name || '').trim().toLowerCase();
+      if (!wanted.has(k)) return;
+      const totalQty = (it.avgQtyPerBucket || 0) * (data.totalBuckets || 1);
+      perDay[k] = totalQty / histDays;
+    });
+    d.perDay = perDay;
+    d.forecastAt = new Date().toLocaleString('en-ZA', { day:'numeric', month:'short', hour:'2-digit', minute:'2-digit' });
+    save();
+  } catch (err) {
+    distriForecastError = 'Could not update forecast (offline?) — using last saved figures.';
+    console.warn('Distrifoods forecast failed:', err);
+  } finally {
+    distriForecastLoading = false;
+    if (S.view === 'distri') rDistriView();
+  }
+}
+
+function distriRowHtml(item) {
+  const d = distriState();
+  const k = distriKey(item);
+  return `<div class="df-row" data-dfkey="${esc(k)}" data-dfname="${esc(k)}">
+    <div class="df-row-top">
+      <div class="df-name">${esc(item.name)}</div>
+      <div class="df-price">${item.price > 0 ? R(item.price) : '—'}</div>
+    </div>
+    <div class="df-grid">
+      <label class="df-cell"><span>Stock</span>
+        <input class="f-input df-in" data-f="stock" type="number" min="0" step="1" inputmode="numeric" placeholder="?"
+          value="${typeof d.stock[k] === 'number' ? d.stock[k] : ''}"></label>
+      <label class="df-cell"><span>Buffer %</span>
+        <input class="f-input df-in" data-f="buffer" type="number" min="0" step="1" inputmode="numeric" placeholder="${d.defaultBuffer}"
+          value="${typeof d.buffer[k] === 'number' ? d.buffer[k] : ''}"></label>
+      <div class="df-cell"><span>Optimal</span><div class="df-val" data-out="optimal"></div></div>
+      <label class="df-cell"><span>Order</span>
+        <input class="f-input df-in df-order" data-f="order" type="number" min="0" step="1" inputmode="numeric"></label>
+    </div>
+    <div class="df-row-foot" data-out="foot"></div>
+  </div>`;
+}
+
+function updateDistriRow(row, item) {
+  const d = distriState();
+  const r = distriCalc(item);
+  row.querySelector('[data-out="optimal"]').textContent = r.perDay > 0 ? r.optimal : '—';
+  row.querySelector('[data-f="buffer"]').placeholder = d.defaultBuffer;
+  const ord = row.querySelector('.df-order');
+  if (document.activeElement !== ord) ord.value = r.hasOverride ? r.qty : (r.hasStock ? r.suggested : '');
+  ord.placeholder = r.hasStock ? String(r.suggested) : '—';
+  ord.classList.toggle('overridden', r.hasOverride);
+  row.classList.toggle('needs-order', r.qty > 0);
+  const foot = [];
+  if (r.perDay > 0) foot.push(`Uses ~${fmtQty(r.usage)} per ${d.coverDays} day${d.coverDays !== 1 ? 's' : ''}`);
+  else foot.push('No purchase history yet — set the order qty manually');
+  if (r.hasOverride && r.hasStock && r.perDay > 0) foot.push(`suggested ${r.suggested}`);
+  if (r.qty > 0 && item.price > 0) foot.push(`line ${R(r.line)}`);
+  row.querySelector('[data-out="foot"]').textContent = foot.join(' · ');
+}
+
+function updateAllDistriRows() {
+  const byKey = new Map(distriItems().map(i => [distriKey(i), i]));
+  document.querySelectorAll('#distriView .df-row').forEach(row => {
+    const item = byKey.get(row.dataset.dfkey);
+    if (item) updateDistriRow(row, item);
+  });
+}
+
+function rDistriStatus() {
+  const el = document.getElementById('dfStatus');
+  if (!el) return;
+  const d = distriState();
+  const missing = distriItems().filter(i => typeof d.stock[distriKey(i)] !== 'number').length;
+  const parts = [];
+  if (distriForecastLoading) parts.push('Updating forecast…');
+  else if (distriForecastError) parts.push(`<span style="color:var(--rust)">${esc(distriForecastError)}</span>`);
+  else parts.push(d.forecastAt ? `Forecast updated ${esc(d.forecastAt)}` : 'Forecast not loaded yet — tap Update forecast');
+  if (missing) parts.push(`${missing} item${missing !== 1 ? 's' : ''} still need a stock count`);
+  el.innerHTML = parts.join(' · ');
+}
+
+function rDistriSummary() {
+  const totalEl = document.getElementById('dfTotal');
+  const warnEl  = document.getElementById('dfMinWarn');
+  const delEl   = document.getElementById('dfDelivery');
+  if (delEl) delEl.innerHTML = distriDeliveryNote();
+  if (!totalEl || !warnEl) return;
+  const lines = distriOrderLines();
+  const total = lines.reduce((s, x) => s + x.line, 0);
+  totalEl.innerHTML = `<span class="order-grand-lbl">Order · ${lines.length} item${lines.length !== 1 ? 's' : ''}</span>
+    <span class="order-grand-val">${R(total)}</span>`;
+  warnEl.innerHTML = lines.length && total < DISTRI_MIN_ORDER
+    ? `<div class="df-warn">⚠️ Below the ${R(DISTRI_MIN_ORDER)} minimum order — add ${R(DISTRI_MIN_ORDER - total)} more.</div>`
+    : '';
+}
+
+function rDistriView() {
+  const c = document.getElementById('distriView');
+  const d = distriState();
+  const items = distriItems();
+
+  let h = `<div class="order-toolbar">
+    <button class="btn-primary" id="dfRefreshBtn">🔮 Update forecast</button>
+    <button class="btn-sec" id="dfPdfBtn">📄 PDF</button>
+    <button class="btn-sec" id="dfEmailBtn">✉️ Email</button>
+    <button class="btn-sec" id="dfResetBtn">↺ Reset order qty</button>
+  </div>
+  <div class="order-pad">
+    <div class="sum-card" style="margin-top:12px">
+      <div class="df-delivery" id="dfDelivery"></div>
+      <div class="f-row">
+        <div class="f-group"><label class="f-label">Cover (days)</label>
+          <input class="f-input" id="dfCoverDays" type="number" min="1" step="1" inputmode="numeric" value="${d.coverDays}"></div>
+        <div class="f-group"><label class="f-label">Default buffer %</label>
+          <input class="f-input" id="dfDefaultBuffer" type="number" min="0" step="1" inputmode="numeric" value="${d.defaultBuffer}"></div>
+      </div>
+      <div class="f-group" style="margin-bottom:0"><label class="f-label">Supplier email</label>
+        <input class="f-input" id="dfEmail" type="email" placeholder="orders@distrifoods.co.za" value="${esc(d.supplierEmail)}"></div>
+      <div class="df-status" id="dfStatus"></div>
+    </div>`;
+
+  if (!items.length) {
+    h += `<div class="empty" style="padding:40px 0"><div class="empty-ico">🚚</div>
+      <h2 class="empty-ttl">No Distri Foods items</h2>
+      <p class="empty-sub">Items appear here when their store in the catalogue sheet is "Distri Foods".<br>Sync the catalogue from the Library tab.</p></div>`;
+  } else {
+    h += `<input class="quick-input df-search" id="dfSearch" type="text" placeholder="Filter items…" autocomplete="off" value="${esc(distriFilter)}">`;
+    items.forEach(item => { h += distriRowHtml(item); });
+  }
+  h += `<div class="order-grand-total" id="dfTotal"></div><div id="dfMinWarn"></div></div>`;
+  c.innerHTML = h;
+
+  const byKey = new Map(items.map(i => [distriKey(i), i]));
+  c.querySelectorAll('.df-row').forEach(row => {
+    const k = row.dataset.dfkey;
+    const item = byKey.get(k);
+    updateDistriRow(row, item);
+    row.querySelectorAll('.df-in').forEach(inp => {
+      inp.addEventListener('input', () => {
+        const map = inp.dataset.f === 'stock' ? d.stock : inp.dataset.f === 'buffer' ? d.buffer : d.orderOverride;
+        const v = inp.value.trim();
+        if (v === '') delete map[k];
+        else {
+          const n = Math.max(0, parseMoney(v));
+          map[k] = inp.dataset.f === 'buffer' ? n : Math.round(n);
+        }
+        save();
+        updateDistriRow(row, item);
+        rDistriSummary();
+        if (inp.dataset.f === 'stock') rDistriStatus();
+      });
+      inp.addEventListener('blur', () => updateDistriRow(row, item));
+    });
+  });
+
+  const applyFilter = () => {
+    const q = distriFilter.trim().toLowerCase();
+    c.querySelectorAll('.df-row').forEach(row => { row.hidden = !!q && !row.dataset.dfname.includes(q); });
+  };
+  document.getElementById('dfSearch')?.addEventListener('input', e => { distriFilter = e.target.value; applyFilter(); });
+  applyFilter();
+
+  document.getElementById('dfCoverDays').addEventListener('input', e => {
+    const n = Math.round(parseMoney(e.target.value));
+    if (n < 1) return;
+    d.coverDays = n; save(); updateAllDistriRows(); rDistriSummary();
+  });
+  document.getElementById('dfDefaultBuffer').addEventListener('input', e => {
+    if (e.target.value.trim() === '') return;
+    d.defaultBuffer = Math.max(0, parseMoney(e.target.value)); save(); updateAllDistriRows(); rDistriSummary();
+  });
+  document.getElementById('dfEmail').addEventListener('input', e => { d.supplierEmail = e.target.value.trim(); save(); });
+  document.getElementById('dfRefreshBtn').addEventListener('click', fetchDistriForecast);
+  document.getElementById('dfPdfBtn').addEventListener('click', exportDistriPDF);
+  document.getElementById('dfEmailBtn').addEventListener('click', openDistriEmail);
+  document.getElementById('dfResetBtn').addEventListener('click', () => {
+    if (!Object.keys(d.orderOverride).length) { toast('No manual quantities to reset'); return; }
+    if (!confirm('Clear all manually entered order quantities and use the suggestions again?')) return;
+    d.orderOverride = {}; save(); rDistriView();
+  });
+
+  rDistriStatus();
+  rDistriSummary();
+}
+
+// Warn (but don't block) when the order is under the supplier minimum.
+function distriConfirmReady(lines) {
+  if (!lines.length) { toast('Nothing to order yet — enter stock counts or order quantities'); return false; }
+  const total = lines.reduce((s, x) => s + x.line, 0);
+  if (total < DISTRI_MIN_ORDER) {
+    return confirm(`This order is ${R(total)}, below the ${R(DISTRI_MIN_ORDER)} minimum. Continue anyway?`);
+  }
+  return true;
+}
+
+function buildDistriEmail(lines) {
+  const del = fmtDeliveryDate(distriDeliveryDate());
+  const total = lines.reduce((s, x) => s + x.line, 0);
+  let body = `Hi Distri Foods,\n\nPlease could we place the following order for delivery on ${del}:\n\n`;
+  lines.forEach(x => { body += `• ${x.qty} × ${x.item.name}\n`; });
+  body += `\nEstimated total: ${R(total)}\n\nThank you!`;
+  return { subject: `Order for delivery ${del}`, body };
+}
+
+function openDistriEmail() {
+  const lines = distriOrderLines();
+  if (!distriConfirmReady(lines)) return;
+  const { subject, body } = buildDistriEmail(lines);
+  document.getElementById('distriEmailSubject').value = subject;
+  document.getElementById('distriEmailTA').value = body;
+  openOverlay('distriEmailOverlay');
+}
+
+function exportDistriPDF() {
+  const lines = distriOrderLines();
+  if (!distriConfirmReady(lines)) return;
+  if (!window.jspdf) { toast('PDF library loading, please try again in a moment'); return; }
+
+  const { jsPDF } = window.jspdf;
+  const doc = new jsPDF({ orientation: 'portrait', unit: 'mm', format: 'a4' });
+  const DARK = [44, 26, 16], AMBER = [184, 115, 51], CREAM = [250, 246, 240], WHITE = [255, 255, 255];
+  const PW = 210, ML = 14, MR = 14, CW = PW - ML - MR;
+  const total = lines.reduce((s, x) => s + x.line, 0);
+
+  const header = () => {
+    doc.setFillColor(...DARK);
+    doc.rect(0, 0, PW, 18, 'F');
+    doc.setFillColor(...AMBER);
+    doc.rect(PW - 6, 0, 6, 18, 'F');
+    doc.setFont('helvetica', 'bold');
+    doc.setFontSize(13);
+    doc.setTextColor(...WHITE);
+    doc.text('Distri Foods Order', ML, 11.5);
+  };
+  const colHeader = y => {
+    doc.setFillColor(...DARK);
+    doc.rect(ML, y, CW, 8, 'F');
+    doc.setFont('helvetica', 'bold');
+    doc.setFontSize(8);
+    doc.setTextColor(...WHITE);
+    doc.text('ITEM', ML + 3, y + 5.5);
+    doc.text('QTY', ML + 125, y + 5.5, { align: 'right' });
+    doc.text('UNIT PRICE', ML + 155, y + 5.5, { align: 'right' });
+    doc.text('TOTAL', PW - MR - 3, y + 5.5, { align: 'right' });
+    return y + 8;
+  };
+
+  header();
+  let y = 28;
+  doc.setFont('helvetica', 'normal');
+  doc.setFontSize(10);
+  doc.setTextColor(...DARK);
+  doc.text(`Order date: ${new Date().toLocaleDateString('en-ZA', { weekday:'long', day:'numeric', month:'long', year:'numeric' })}`, ML, y);
+  y += 6;
+  doc.setFont('helvetica', 'bold');
+  doc.text(`Requested delivery: ${fmtDeliveryDate(distriDeliveryDate())}`, ML, y);
+  y = colHeader(y + 8);
+
+  doc.setFontSize(9);
+  lines.forEach((x, idx) => {
+    if (y > 270) { doc.addPage(); header(); y = colHeader(26); doc.setFontSize(9); }
+    doc.setFillColor(...(idx % 2 ? CREAM : WHITE));
+    doc.rect(ML, y, CW, 8, 'F');
+    doc.setFont('helvetica', 'normal');
+    doc.setTextColor(...DARK);
+    doc.text(doc.splitTextToSize(x.item.name, 100)[0], ML + 3, y + 5.5);
+    doc.text(String(x.qty), ML + 125, y + 5.5, { align: 'right' });
+    doc.text(x.item.price > 0 ? R(x.item.price) : '-', ML + 155, y + 5.5, { align: 'right' });
+    doc.text(x.item.price > 0 ? R(x.line) : '-', PW - MR - 3, y + 5.5, { align: 'right' });
+    y += 8;
+  });
+
+  if (y > 265) { doc.addPage(); header(); y = 26; }
+  y += 4;
+  doc.setFillColor(...DARK);
+  doc.rect(ML, y, CW, 11, 'F');
+  doc.setFont('helvetica', 'bold');
+  doc.setFontSize(10);
+  doc.setTextColor(...WHITE);
+  doc.text('ESTIMATED TOTAL', ML + 4, y + 7);
+  doc.setTextColor(...AMBER);
+  doc.text(R(total), PW - MR - 3, y + 7, { align: 'right' });
+
+  doc.save(`distrifoods-order-${todayYMD(0)}.pdf`);
+}
+
+// ═══════════════════════════════════════════════════════════
 // PIN MODAL
 // ═══════════════════════════════════════════════════════════
 const CORRECT_PIN = '1919';
 let _pinEntry = '';
 let _pinCallback = null;
+let _pinExpected = CORRECT_PIN;
 
-function openPinModal(onSuccess) {
+function openPinModal(onSuccess, pin = CORRECT_PIN, label = 'Weekly Orders') {
   _pinEntry = '';
   _pinCallback = onSuccess;
+  _pinExpected = pin;
+  document.getElementById('pinTitle').textContent = `🔒 ${label}`;
+  document.getElementById('pinSub').textContent = `Enter your PIN to access ${label}`;
   updatePinDots();
   document.getElementById('pinError').textContent = '';
   openOverlay('pinOverlay');
@@ -5261,7 +5712,7 @@ function initPinModal() {
       else if (_pinEntry.length < 4) {
         _pinEntry += v; updatePinDots();
         if (_pinEntry.length === 4) {
-          if (_pinEntry === CORRECT_PIN) { closeOverlay('pinOverlay'); if (_pinCallback) _pinCallback(); }
+          if (_pinEntry === _pinExpected) { closeOverlay('pinOverlay'); if (_pinCallback) _pinCallback(); }
           else pinShakeError();
         }
       }
@@ -5344,7 +5795,22 @@ function init() {
   });
 
   // Overlay backdrop tap to close
-  ['itemOverlay','listOverlay','storeOverlay','exportOverlay','orderItemOverlay','supplierOverlay','pinOverlay','orderLibOverlay','oLibQtyOverlay','libEditOverlay','bkItemOverlay','bkSupItemOverlay','bkSuppliersOverlay','catMgmtOverlay','bkQtyOverlay'].forEach(id=>{
+  // Distrifoods order email
+  document.getElementById('distriEmailClose').addEventListener('click', () => closeOverlay('distriEmailOverlay'));
+  document.getElementById('distriEmailCopyBtn').addEventListener('click', () => {
+    const ta = document.getElementById('distriEmailTA');
+    if (navigator.clipboard) {
+      navigator.clipboard.writeText(ta.value).then(()=>toast('Copied to clipboard!')).catch(()=>{ta.select();document.execCommand('copy');toast('Copied!');});
+    } else { ta.select(); document.execCommand('copy'); toast('Copied!'); }
+  });
+  document.getElementById('distriEmailOpenBtn').addEventListener('click', () => {
+    const to = distriState().supplierEmail.replace(/[?&#\s]/g, '');
+    const subject = document.getElementById('distriEmailSubject').value;
+    const body = document.getElementById('distriEmailTA').value;
+    window.location.href = `mailto:${to}?subject=${encodeURIComponent(subject)}&body=${encodeURIComponent(body)}`;
+  });
+
+  ['itemOverlay','listOverlay','storeOverlay','exportOverlay','orderItemOverlay','supplierOverlay','pinOverlay','orderLibOverlay','oLibQtyOverlay','libEditOverlay','bkItemOverlay','bkSupItemOverlay','bkSuppliersOverlay','catMgmtOverlay','bkQtyOverlay','distriEmailOverlay'].forEach(id=>{
     document.getElementById(id).addEventListener('click',e=>{
       if (e.target.id !== id) return;
       closeOverlay(id);
