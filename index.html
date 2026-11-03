@@ -5311,6 +5311,7 @@ function distriState() {
   d.orderOverride = d.orderOverride || {};
   d.perDay = d.perDay || {};
   d.forecastAt = d.forecastAt || '';
+  d.since = d.since || '';
   return d;
 }
 
@@ -5377,7 +5378,15 @@ async function fetchDistriForecast() {
   distriForecastError = '';
   rDistriStatus();
   try {
-    const qs = new URLSearchParams({ action:'getForecast', targetStart: todayYMD(0), targetEnd: todayYMD(d.coverDays - 1) });
+    const params = { action:'getForecast', targetStart: todayYMD(0), targetEnd: todayYMD(d.coverDays - 1) };
+    // Average usage only over the period we've actually been ordering from
+    // Distri Foods — older history would dilute the per-day figure.
+    if (d.since) {
+      const now = new Date();
+      params.historyStart = d.since;
+      params.historyEnd = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')}`;
+    }
+    const qs = new URLSearchParams(params);
     const res  = await fetch(APPS_SCRIPT_URL + '?' + qs.toString());
     const data = await res.json();
     if (data.error) throw new Error(data.error);
@@ -5460,6 +5469,7 @@ function rDistriStatus() {
   if (distriForecastLoading) parts.push('Updating forecast…');
   else if (distriForecastError) parts.push(`<span style="color:var(--rust)">${esc(distriForecastError)}</span>`);
   else parts.push(d.forecastAt ? `Forecast updated ${esc(d.forecastAt)}` : 'Forecast not loaded yet — tap Update forecast');
+  if (!d.since) parts.push('<span style="color:var(--rust)">Set "Ordering since" so the forecast only uses Distri Foods history</span>');
   if (missing) parts.push(`${missing} item${missing !== 1 ? 's' : ''} still need a stock count`);
   el.innerHTML = parts.join(' · ');
 }
@@ -5501,6 +5511,8 @@ function rDistriView() {
       </div>
       <div class="f-group" style="margin-bottom:0"><label class="f-label">Supplier email</label>
         <input class="f-input" id="dfEmail" type="email" placeholder="orders@distrifoods.co.za" value="${esc(d.supplierEmail)}"></div>
+      <div class="f-group" style="margin:14px 0 0"><label class="f-label">Ordering from Distri Foods since</label>
+        <input class="f-input" id="dfSince" type="date" value="${esc(d.since)}"></div>
       <div class="df-status" id="dfStatus"></div>
     </div>`;
 
@@ -5555,6 +5567,7 @@ function rDistriView() {
     d.defaultBuffer = Math.max(0, parseMoney(e.target.value)); save(); updateAllDistriRows(); rDistriSummary();
   });
   document.getElementById('dfEmail').addEventListener('input', e => { d.supplierEmail = e.target.value.trim(); save(); });
+  document.getElementById('dfSince').addEventListener('change', e => { d.since = e.target.value; save(); fetchDistriForecast(); });
   document.getElementById('dfRefreshBtn').addEventListener('click', fetchDistriForecast);
   document.getElementById('dfPdfBtn').addEventListener('click', exportDistriPDF);
   document.getElementById('dfEmailBtn').addEventListener('click', openDistriEmail);
