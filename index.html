@@ -994,6 +994,17 @@
     .df-chip-n { font-size:11px; background:var(--cream-mid); color:var(--muted); border-radius:9px; padding:1px 7px; }
     .df-chip.active .df-chip-n { background:rgba(255,255,255,.18); color:#fff; }
 
+    .df-clear-row {
+      display:flex; align-items:center; gap:6px; margin-top:4px; overflow-x:auto; scrollbar-width:none;
+    }
+    .df-clear-row::-webkit-scrollbar { display:none; }
+    .df-clear-lbl { font-size:11px; font-weight:700; text-transform:uppercase; letter-spacing:.06em; color:var(--muted); flex-shrink:0; margin-right:2px; }
+    .df-clear-btn {
+      flex-shrink:0; height:28px; padding:0 11px; border-radius:14px; cursor:pointer;
+      border:1.5px solid rgba(184,90,58,.35); background:transparent; color:var(--rust);
+      font-family:'DM Sans',sans-serif; font-size:12px; font-weight:600;
+    }
+    .df-clear-btn:active { background:rgba(184,90,58,.1); }
     .df-cat { display:flex; align-items:center; gap:8px; margin:18px 2px 8px; }
     .df-cat-dot { width:9px; height:9px; border-radius:50%; flex-shrink:0; }
     .df-cat-name { font-size:11px; font-weight:700; text-transform:uppercase; letter-spacing:.08em; color:var(--muted); }
@@ -5784,7 +5795,6 @@ function rDistriView() {
         <div class="df-status" id="dfStatus"></div>
         <div class="df-settings-actions">
           <button class="df-pill" id="dfRefreshBtn">🔮 Update forecast</button>
-          <button class="df-pill" id="dfResetBtn">↺ Clear typed order qtys</button>
         </div>
       </div>
     </details>`;
@@ -5799,6 +5809,10 @@ function rDistriView() {
       <div class="df-chips">${DISTRI_CHIPS.map(([id, label]) =>
         `<button class="df-chip${distriChip === id ? ' active' : ''}" data-chip="${id}">${label}<span class="df-chip-n" id="dfChipN-${id}"></span></button>`).join('')}
       </div>
+    </div>
+    <div class="df-clear-row">
+      <span class="df-clear-lbl">Clear all</span>
+      ${Object.entries(DISTRI_CLEAR).map(([f, x]) => `<button class="df-clear-btn" data-clear="${f}">${x.label}</button>`).join('')}
     </div>`;
     const groups = new Map();
     items.forEach(i => {
@@ -5837,11 +5851,7 @@ function rDistriView() {
   document.getElementById('dfRefreshBtn').addEventListener('click', fetchDistriForecast);
   document.getElementById('dfPdfBtn').addEventListener('click', exportDistriPDF);
   document.getElementById('dfEmailBtn').addEventListener('click', openDistriEmail);
-  document.getElementById('dfResetBtn').addEventListener('click', () => {
-    if (!Object.keys(d.orderOverride).length) { toast('No typed order quantities to clear'); return; }
-    if (!confirm('Clear all typed order quantities and use the suggestions again?')) return;
-    d.orderOverride = {}; save(); rDistriView();
-  });
+  c.querySelectorAll('[data-clear]').forEach(b => b.addEventListener('click', () => clearDistriField(b.dataset.clear)));
   document.getElementById('dfSearch')?.addEventListener('input', e => { distriFilter = e.target.value; applyDistriFilter(); });
   c.querySelectorAll('[data-chip]').forEach(b => b.addEventListener('click', () => {
     distriChip = b.dataset.chip;
@@ -5852,6 +5862,28 @@ function rDistriView() {
   applyDistriFilter();
   rDistriStatus();
   rDistriSummary();
+}
+
+// One "clear all" per field. Each only touches its own field, so e.g.
+// clearing order quantities keeps typed optimal levels.
+const DISTRI_CLEAR = {
+  stock:   { label: 'Stock',   key: 'stock',           what: 'stock counts' },
+  optimal: { label: 'Optimal', key: 'optimalOverride', what: 'typed optimal levels (back to the forecast)' },
+  order:   { label: 'Order',   key: 'orderOverride',   what: 'typed order quantities (back to the suggestions)' },
+  buffer:  { label: 'Buffer',  key: 'buffer',          what: 'per-item buffers (back to the default)' },
+  codes:   { label: 'Codes',   key: 'codes',           what: 'item codes' },
+};
+
+function clearDistriField(field) {
+  const d = distriState();
+  const x = DISTRI_CLEAR[field];
+  const n = Object.keys(d[x.key]).length;
+  if (!n) { toast(`No ${x.what.split(' (')[0]} to clear`); return; }
+  if (!confirm(`Clear ${n} ${x.what}?`)) return;
+  d[x.key] = {};
+  save();
+  rDistriView();
+  toast(`Cleared ${x.label.toLowerCase()}`);
 }
 
 // Warn (but don't block) about a sub-minimum order or items without a code.
