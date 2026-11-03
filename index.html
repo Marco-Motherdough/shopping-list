@@ -932,27 +932,139 @@
     .olib-item-meta { display:flex; gap:6px; flex-wrap:wrap; margin-top:3px; align-items:center; }
 
     /* ── DISTRIFOODS ORDERS ────────────────────────────────── */
-    .df-delivery { font-size:14px; margin-bottom:12px; }
-    .df-status { font-size:12px; color:var(--muted); margin-top:10px; line-height:1.5; }
-    .df-search { width:100%; margin:4px 0 10px; }
-    .df-row {
-      background:var(--white); border-radius:var(--r); box-shadow:var(--shadow);
-      padding:10px 12px; margin-bottom:8px; border-left:4px solid transparent;
+    .df-wrap { padding:14px 14px 28px; max-width:860px; margin:0 auto; }
+    .df-hero {
+      color:#fff; border-radius:18px; padding:18px; box-shadow:var(--shadow-lg);
+      background:radial-gradient(circle at 100% 0, rgba(184,115,51,.38), transparent 55%), var(--dark);
     }
-    .df-row.needs-order { border-left-color:var(--amber); }
-    .df-row-top { display:flex; justify-content:space-between; gap:10px; align-items:baseline; }
-    .df-name { font-size:15px; font-weight:500; min-width:0; overflow-wrap:anywhere; }
-    .df-price { font-size:13px; color:var(--muted); white-space:nowrap; }
-    .df-grid { display:grid; grid-template-columns:repeat(4, minmax(0,1fr)); gap:8px; margin-top:8px; }
-    .df-cell { display:flex; flex-direction:column; gap:3px; min-width:0; }
-    .df-cell > span { font-size:10px; font-weight:600; text-transform:uppercase; letter-spacing:.05em; color:var(--muted); }
-    .df-in { height:38px; padding:0 8px; font-size:15px; }
-    .df-order.overridden, .df-opt.overridden { border-color:var(--amber); }
-    .df-val { height:38px; display:flex; align-items:center; font-size:15px; font-weight:600; }
-    .df-row-foot { font-size:11px; color:var(--muted); margin-top:6px; }
-    .df-warn {
-      background:rgba(184,90,58,.1); color:var(--rust); border-radius:var(--r-sm);
-      padding:10px 14px; font-size:13px; font-weight:600; margin-top:10px;
+    .df-hero-top { display:flex; justify-content:space-between; gap:14px; flex-wrap:wrap; }
+    .df-eyebrow { font-size:11px; letter-spacing:.08em; text-transform:uppercase; color:rgba(255,255,255,.6); font-weight:600; }
+    .df-delivery-date { font-family:'Playfair Display',serif; font-size:24px; font-weight:700; margin-top:3px; }
+    .df-delivery-sub { font-size:12px; color:rgba(255,255,255,.7); margin-top:3px; }
+    .df-hero-total { text-align:right; margin-left:auto; }
+    .df-total-val { font-family:'Playfair Display',serif; font-size:30px; font-weight:700; color:#E0A060; margin-top:2px; }
+    .df-progress { margin-top:16px; }
+    .df-bar { height:8px; background:rgba(255,255,255,.14); border-radius:4px; overflow:hidden; }
+    .df-bar-fill { height:100%; width:0; background:var(--amber); border-radius:4px; transition:width .3s, background .3s; }
+    .df-bar-fill.ok { background:#7DC47F; }
+    .df-progress-lbl { display:flex; justify-content:space-between; gap:8px; font-size:12px; color:rgba(255,255,255,.75); margin-top:6px; }
+    .df-hero-note { font-size:12px; font-weight:600; color:#F4C2A8; margin-top:10px; }
+    .df-hero-note:empty { display:none; }
+    .df-hero-actions { display:flex; gap:8px; margin-top:16px; }
+    .df-hero-btn {
+      flex:1; height:46px; border-radius:23px; cursor:pointer;
+      font-family:'DM Sans',sans-serif; font-size:15px; font-weight:600; transition:transform .1s;
+    }
+    .df-hero-btn:active { transform:scale(.97); }
+    .df-hero-btn.primary { flex:1.6; background:var(--amber); color:#fff; border:none; }
+    .df-hero-btn.ghost { background:rgba(255,255,255,.08); color:#fff; border:1.5px solid rgba(255,255,255,.25); }
+
+    .df-settings { background:var(--white); border-radius:var(--r); box-shadow:var(--shadow); margin-top:12px; }
+    .df-settings > summary {
+      list-style:none; display:flex; align-items:center; gap:10px; padding:13px 16px; cursor:pointer;
+    }
+    .df-settings > summary::-webkit-details-marker { display:none; }
+    .df-settings-title { font-weight:600; font-size:14px; white-space:nowrap; }
+    .df-settings-sum { font-size:12px; color:var(--muted); margin-left:auto; text-align:right; }
+    .df-chev { color:var(--amber); font-size:12px; transition:transform .2s; }
+    .df-settings[open] .df-chev { transform:rotate(180deg); }
+    .df-settings-body { padding:14px 16px 16px; border-top:1px solid var(--cream-mid); }
+    .df-status { font-size:12px; color:var(--muted); line-height:1.5; margin-top:-4px; }
+    .df-err { color:var(--rust); }
+    .df-settings-actions { display:flex; gap:8px; flex-wrap:wrap; margin-top:12px; }
+    .df-pill {
+      height:36px; padding:0 14px; border-radius:18px; border:1.5px solid var(--border); background:var(--white);
+      font-family:'DM Sans',sans-serif; font-size:13px; font-weight:600; color:var(--dark); cursor:pointer;
+    }
+    .df-pill:active { background:var(--cream-mid); }
+
+    .df-tools {
+      position:sticky; top:var(--hdr-h); z-index:40; background:var(--cream);
+      padding:12px 0 6px; margin-top:4px;
+    }
+    .df-search { width:100%; }
+    .df-chips { display:flex; gap:6px; margin-top:8px; overflow-x:auto; scrollbar-width:none; }
+    .df-chips::-webkit-scrollbar { display:none; }
+    .df-chip {
+      flex-shrink:0; height:32px; padding:0 12px; border-radius:16px; border:1.5px solid var(--border);
+      background:var(--white); color:var(--muted); font-family:'DM Sans',sans-serif; font-size:13px; font-weight:600;
+      cursor:pointer; display:flex; align-items:center; gap:6px; white-space:nowrap;
+    }
+    .df-chip.active { background:var(--dark); border-color:var(--dark); color:#fff; }
+    .df-chip-n { font-size:11px; background:var(--cream-mid); color:var(--muted); border-radius:9px; padding:1px 7px; }
+    .df-chip.active .df-chip-n { background:rgba(255,255,255,.18); color:#fff; }
+
+    .df-cat { display:flex; align-items:center; gap:8px; margin:18px 2px 8px; }
+    .df-cat-dot { width:9px; height:9px; border-radius:50%; flex-shrink:0; }
+    .df-cat-name { font-size:11px; font-weight:700; text-transform:uppercase; letter-spacing:.08em; color:var(--muted); }
+    .df-cat-n { font-size:11px; background:var(--cream-dark); color:var(--muted); padding:1px 7px; border-radius:9px; }
+
+    .df-item {
+      background:var(--white); border-radius:14px; box-shadow:var(--shadow);
+      padding:12px 14px; margin-bottom:8px; border:1.5px solid transparent; transition:border-color .2s;
+    }
+    .df-item.ordering { border-color:rgba(184,115,51,.55); }
+    .df-item-head { display:flex; gap:10px; align-items:flex-start; }
+    .df-item-title { flex:1; min-width:0; }
+    .df-item-name { font-size:15px; font-weight:600; overflow-wrap:anywhere; }
+    .df-item-meta { font-size:12px; color:var(--muted); margin-top:2px; }
+    .df-badge { font-size:11px; font-weight:700; padding:4px 9px; border-radius:11px; white-space:nowrap; flex-shrink:0; }
+    .df-badge.need { background:var(--cream-mid); color:var(--muted); }
+    .df-badge.order { background:rgba(184,115,51,.15); color:var(--amber-dark); }
+    .df-badge.ok { background:rgba(90,122,92,.14); color:var(--sage); }
+    .df-code { display:flex; align-items:center; gap:8px; margin-top:8px; }
+    .df-code > span { font-size:10px; font-weight:700; text-transform:uppercase; letter-spacing:.06em; color:var(--muted); }
+    .df-code-in {
+      flex:1; max-width:200px; height:32px; padding:0 10px; border-radius:8px;
+      border:1.5px dashed var(--border); background:var(--cream); color:var(--dark);
+      font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace; font-size:13px; font-weight:600; outline:none;
+    }
+    .df-code-in:focus { border-style:solid; border-color:var(--amber); background:var(--white); }
+    .df-code-in:not(:placeholder-shown) { border-style:solid; }
+    .df-fields { display:grid; grid-template-columns:minmax(0,1.35fr) minmax(0,1fr) minmax(0,1fr); gap:8px; margin-top:10px; }
+    .df-field { display:flex; flex-direction:column; gap:4px; min-width:0; }
+    .df-field > span { font-size:10px; font-weight:700; text-transform:uppercase; letter-spacing:.06em; color:var(--muted); }
+    .df-stepper {
+      display:flex; height:42px; border:1.5px solid var(--border); border-radius:10px; overflow:hidden; background:var(--white);
+    }
+    .df-stepper:focus-within { border-color:var(--amber); }
+    .df-stepper button {
+      width:34px; flex-shrink:0; border:none; background:var(--cream-mid); color:var(--dark);
+      font-size:19px; cursor:pointer; user-select:none; -webkit-user-select:none;
+    }
+    .df-stepper button:active { background:var(--cream-dark); }
+    .df-stepper input {
+      flex:1; min-width:0; border:none; outline:none; background:transparent; text-align:center;
+      font-family:'DM Sans',sans-serif; font-size:16px; font-weight:600; color:var(--dark);
+    }
+    .df-num {
+      height:42px; width:100%; border:1.5px solid var(--border); border-radius:10px; background:var(--white);
+      text-align:center; font-family:'DM Sans',sans-serif; font-size:16px; font-weight:600; color:var(--dark); outline:none;
+    }
+    .df-num:focus { border-color:var(--amber); }
+    .df-num.overridden { border-color:var(--amber); background:#FFF6EC; }
+    .df-item.ordering .df-order { color:var(--amber-dark); }
+    .df-item input[type=number]::-webkit-inner-spin-button,
+    .df-item input[type=number]::-webkit-outer-spin-button { -webkit-appearance:none; margin:0; }
+    .df-item input[type=number] { -moz-appearance:textfield; appearance:textfield; }
+    .df-item-note { font-size:12px; color:var(--amber-dark); margin-top:7px; }
+    .df-item-note:empty { display:none; }
+    .df-item-foot {
+      display:flex; justify-content:space-between; align-items:center; gap:6px 10px; flex-wrap:wrap;
+      margin-top:8px; font-size:12px; color:var(--muted);
+    }
+    .df-buf { display:inline-flex; align-items:center; gap:4px; }
+    .df-buf-in {
+      width:44px; height:26px; text-align:center; border:1.5px solid var(--border); border-radius:6px;
+      font-family:'DM Sans',sans-serif; font-size:12px; color:var(--dark); background:var(--white); outline:none;
+    }
+    .df-buf-in:focus { border-color:var(--amber); }
+    .df-line { font-weight:700; color:var(--dark); margin-left:auto; }
+    .df-nomatch { text-align:center; color:var(--muted); font-size:14px; padding:30px 0; }
+    @media (min-width:768px) {
+      .df-wrap { padding:20px 28px 32px; }
+      .df-delivery-date { font-size:28px; }
+      .df-total-val { font-size:34px; }
     }
 
     /* ── PIN MODAL ─────────────────────────────────────────── */
@@ -2070,7 +2182,7 @@ function render() {
   document.getElementById('storesBtn').style.display = isSpecial ? 'none' : '';
   document.getElementById('catMgmtBtn').style.display = isSpecial ? 'none' : '';
   document.querySelectorAll('.nav-btn').forEach(b => b.style.display = isSpecial ? 'none' : '');
-  if (isSpecial) initTabletUI();
+  initTabletUI();
   if (S.view === 'list')    rListView();
   if (S.view === 'bystore') rStoreView();
   if (S.view === 'summary') rSummaryView();
@@ -2137,7 +2249,7 @@ function initTabletUI() {
   const brand = document.querySelector('.sidebar-brand');
   const totals = document.getElementById('sidebarTotals');
   if (brand)  brand.style.display  = isTablet ? '' : 'none';
-  if (totals) totals.style.display = isTablet ? '' : 'none';
+  if (totals) totals.style.display = isTablet && S.view !== 'distri' ? '' : 'none';
 }
 
 window.addEventListener('resize', initTabletUI);
@@ -5313,6 +5425,7 @@ function distriState() {
   d.perDay = d.perDay || {};
   d.forecastAt = d.forecastAt || '';
   d.since = d.since || '';
+  d.codes = d.codes || {};
   return d;
 }
 
@@ -5368,14 +5481,6 @@ function distriDeliveryDate(now = new Date()) {
 function fmtDeliveryDate(d) {
   return d.toLocaleDateString('en-ZA', { weekday:'long', day:'numeric', month:'long' });
 }
-function distriDeliveryNote(now = new Date()) {
-  const del = distriDeliveryDate(now);
-  if (del.toDateString() === now.toDateString()) {
-    return `🚚 Order before 08:00 → delivery <strong>today</strong>`;
-  }
-  return `🚚 Order now → delivery <strong>${fmtDeliveryDate(del)}</strong>`;
-}
-
 async function fetchDistriForecast() {
   if (!APPS_SCRIPT_URL || APPS_SCRIPT_URL === 'YOUR_APPS_SCRIPT_URL_HERE') return;
   const d = distriState();
@@ -5416,170 +5521,316 @@ async function fetchDistriForecast() {
   }
 }
 
-function distriRowHtml(item) {
+const DISTRI_CHIPS = [['all', 'All'], ['order', 'To order'], ['count', 'Not counted'], ['code', 'No code']];
+let distriChip = 'all';
+let distriSettingsOpen = null;
+let distriByKey = new Map();
+
+function distriItemHtml(item) {
   const d = distriState();
   const k = distriKey(item);
-  return `<div class="df-row" data-dfkey="${esc(k)}" data-dfname="${esc(k)}">
-    <div class="df-row-top">
-      <div class="df-name">${esc(item.name)}</div>
-      <div class="df-price">${item.price > 0 ? R(item.price) : '—'}</div>
+  const num = map => (typeof map[k] === 'number' ? map[k] : '');
+  return `<article class="df-item" data-dfkey="${esc(k)}">
+    <div class="df-item-head">
+      <div class="df-item-title">
+        <div class="df-item-name">${esc(item.name)}</div>
+        <div class="df-item-meta">${item.price > 0 ? R(item.price) + ' each' : 'No price'}</div>
+      </div>
+      <span class="df-badge" data-out="badge"></span>
     </div>
-    <div class="df-grid">
-      <label class="df-cell"><span>Stock</span>
-        <input class="f-input df-in" data-f="stock" type="number" min="0" step="1" inputmode="numeric" placeholder="?"
-          value="${typeof d.stock[k] === 'number' ? d.stock[k] : ''}"></label>
-      <label class="df-cell"><span>Buffer %</span>
-        <input class="f-input df-in" data-f="buffer" type="number" min="0" step="1" inputmode="numeric" placeholder="${d.defaultBuffer}"
-          value="${typeof d.buffer[k] === 'number' ? d.buffer[k] : ''}"></label>
-      <label class="df-cell"><span>Optimal</span>
-        <input class="f-input df-in df-opt" data-f="optimal" type="number" min="0" step="1" inputmode="numeric"></label>
-      <label class="df-cell"><span>Order</span>
-        <input class="f-input df-in df-order" data-f="order" type="number" min="0" step="1" inputmode="numeric"></label>
+    <label class="df-code"><span>Code</span>
+      <input class="df-code-in" data-f="code" type="text" autocomplete="off" autocapitalize="characters" spellcheck="false"
+        placeholder="Add item code" value="${esc(d.codes[k] || '')}"></label>
+    <div class="df-fields">
+      <div class="df-field"><span>Stock</span>
+        <div class="df-stepper">
+          <button type="button" data-step="-1" aria-label="Less stock">−</button>
+          <input data-f="stock" type="number" min="0" step="1" inputmode="numeric" placeholder="?" value="${num(d.stock)}">
+          <button type="button" data-step="1" aria-label="More stock">+</button>
+        </div></div>
+      <label class="df-field"><span>Optimal</span>
+        <input class="df-num df-opt" data-f="optimal" type="number" min="0" step="1" inputmode="numeric"></label>
+      <label class="df-field"><span>Order</span>
+        <input class="df-num df-order" data-f="order" type="number" min="0" step="1" inputmode="numeric"></label>
     </div>
-    <div class="df-row-foot" data-out="foot"></div>
-  </div>`;
+    <div class="df-item-note" data-out="note"></div>
+    <div class="df-item-foot">
+      <span data-out="fc"></span>
+      <label class="df-buf">Buffer
+        <input class="df-buf-in" data-f="buffer" type="number" min="0" step="1" inputmode="numeric"
+          placeholder="${d.defaultBuffer}" value="${num(d.buffer)}">%</label>
+      <span class="df-line" data-out="line"></span>
+    </div>
+  </article>`;
 }
 
-function updateDistriRow(row, item) {
+function updateDistriItem(el, item) {
   const d = distriState();
   const r = distriCalc(item);
-  const opt = row.querySelector('.df-opt');
+  const opt = el.querySelector('.df-opt');
+  const ord = el.querySelector('.df-order');
   if (document.activeElement !== opt) opt.value = r.hasOptimal ? r.optimal : '';
   opt.placeholder = r.perDay > 0 ? String(r.forecastOptimal) : '—';
   opt.classList.toggle('overridden', r.hasOptimalOverride);
-  row.querySelector('[data-f="buffer"]').placeholder = d.defaultBuffer;
-  const ord = row.querySelector('.df-order');
-  if (document.activeElement !== ord) ord.value = r.hasOverride ? r.qty : (r.hasStock ? r.suggested : '');
-  ord.placeholder = r.hasStock ? String(r.suggested) : '—';
+  const canSuggest = r.hasStock && r.hasOptimal;
+  if (document.activeElement !== ord) ord.value = r.hasOverride ? r.qty : (canSuggest ? r.suggested : '');
+  ord.placeholder = canSuggest ? String(r.suggested) : '—';
   ord.classList.toggle('overridden', r.hasOverride);
-  row.classList.toggle('needs-order', r.qty > 0);
-  const foot = [];
-  if (r.perDay > 0) foot.push(`Uses ~${fmtQty(r.usage)} per ${d.coverDays} day${d.coverDays !== 1 ? 's' : ''}`);
-  else if (!r.hasOptimalOverride) foot.push('No purchase history yet — set the optimal level');
-  if (r.hasOptimalOverride && r.perDay > 0) foot.push(`forecast optimal ${r.forecastOptimal}`);
-  if (r.hasOverride && r.hasStock && r.hasOptimal && r.qty !== r.suggested) {
-    foot.push(`manual order qty — suggested ${r.suggested} (clear the box to use it)`);
-  }
-  if (r.qty > 0 && item.price > 0) foot.push(`line ${R(r.line)}`);
-  row.querySelector('[data-out="foot"]').textContent = foot.join(' · ');
+  el.querySelector('.df-buf-in').placeholder = d.defaultBuffer;
+  el.classList.toggle('ordering', r.qty > 0);
+
+  const badge = el.querySelector('[data-out="badge"]');
+  let cls = 'ok', txt = '✓ Enough';
+  if (r.qty > 0) { cls = 'order'; txt = `Order ${r.qty}`; }
+  else if (!r.hasStock) { cls = 'need'; txt = 'Not counted'; }
+  else if (!r.hasOptimal) { cls = 'need'; txt = 'Set optimal'; }
+  badge.className = 'df-badge ' + cls;
+  badge.textContent = txt;
+
+  const notes = [];
+  if (r.hasOptimalOverride && r.perDay > 0) notes.push(`Forecast suggests optimal ${r.forecastOptimal}`);
+  if (r.hasOverride && canSuggest && r.qty !== r.suggested) notes.push(`Typed order qty — suggested ${r.suggested} (clear the box to use it)`);
+  el.querySelector('[data-out="note"]').textContent = notes.join(' · ');
+  el.querySelector('[data-out="fc"]').textContent = r.perDay > 0
+    ? `Uses ~${fmtQty(r.usage)} per ${d.coverDays}d`
+    : 'No purchase history';
+  el.querySelector('[data-out="line"]').textContent = r.qty > 0 && item.price > 0 ? R(r.line) : '';
 }
 
-function updateAllDistriRows() {
-  const byKey = new Map(distriItems().map(i => [distriKey(i), i]));
-  document.querySelectorAll('#distriView .df-row').forEach(row => {
-    const item = byKey.get(row.dataset.dfkey);
-    if (item) updateDistriRow(row, item);
+function updateAllDistriItems() {
+  document.querySelectorAll('#distriView .df-item').forEach(el => {
+    const item = distriByKey.get(el.dataset.dfkey);
+    if (item) updateDistriItem(el, item);
   });
 }
 
+function distriChipMatch(chip, item) {
+  if (chip === 'all') return true;
+  const r = distriCalc(item);
+  if (chip === 'order') return r.qty > 0;
+  if (chip === 'count') return !r.hasStock;
+  if (chip === 'code') return !distriState().codes[r.k];
+  return true;
+}
+
+function applyDistriFilter() {
+  const q = distriFilter.trim().toLowerCase();
+  let shown = 0;
+  document.querySelectorAll('#distriView .df-item').forEach(el => {
+    const item = distriByKey.get(el.dataset.dfkey);
+    const code = (distriState().codes[el.dataset.dfkey] || '').toLowerCase();
+    const textMatch = !q || el.dataset.dfkey.includes(q) || code.includes(q);
+    el.hidden = !(item && textMatch && distriChipMatch(distriChip, item));
+    if (!el.hidden) shown++;
+  });
+  document.querySelectorAll('#distriView .df-group').forEach(g => {
+    g.hidden = !g.querySelector('.df-item:not([hidden])');
+  });
+  const none = document.getElementById('dfNoMatch');
+  if (none) none.hidden = shown > 0;
+}
+
 function rDistriStatus() {
-  const el = document.getElementById('dfStatus');
-  if (!el) return;
   const d = distriState();
-  const missing = distriItems().filter(i => typeof d.stock[distriKey(i)] !== 'number').length;
-  const parts = [];
-  if (distriForecastLoading) parts.push('Updating forecast…');
-  else if (distriForecastError) parts.push(`<span style="color:var(--rust)">${esc(distriForecastError)}</span>`);
-  else parts.push(d.forecastAt ? `Forecast updated ${esc(d.forecastAt)}` : 'Forecast not loaded yet — tap Update forecast');
-  if (!d.since) parts.push('<span style="color:var(--rust)">Set "Ordering since" so the forecast only uses Distri Foods history</span>');
-  if (missing) parts.push(`${missing} item${missing !== 1 ? 's' : ''} still need a stock count`);
-  el.innerHTML = parts.join(' · ');
+  const el = document.getElementById('dfStatus');
+  if (el) {
+    const parts = [];
+    if (distriForecastLoading) parts.push('Updating forecast…');
+    else if (distriForecastError) parts.push(`<span class="df-err">${esc(distriForecastError)}</span>`);
+    else parts.push(d.forecastAt ? `Forecast updated ${esc(d.forecastAt)}` : 'Forecast not loaded yet');
+    if (!d.since) parts.push('<span class="df-err">Set "Ordering since" so the forecast only uses Distri Foods history</span>');
+    el.innerHTML = parts.join(' · ');
+  }
+  const sum = document.getElementById('dfSettingsSum');
+  if (sum) {
+    sum.innerHTML = `${d.coverDays}-day cover · ${fmtQty(d.defaultBuffer)}% buffer` +
+      (d.since ? '' : ' · <span class="df-err">start date missing</span>');
+  }
 }
 
 function rDistriSummary() {
-  const totalEl = document.getElementById('dfTotal');
-  const warnEl  = document.getElementById('dfMinWarn');
-  const delEl   = document.getElementById('dfDelivery');
-  if (delEl) delEl.innerHTML = distriDeliveryNote();
-  if (!totalEl || !warnEl) return;
+  const now = new Date();
+  const del = distriDeliveryDate(now);
+  const sameDay = del.toDateString() === now.toDateString();
+  const set = (id, html) => { const el = document.getElementById(id); if (el) el.innerHTML = html; };
+  set('dfDelDate', sameDay ? 'Today' : del.toLocaleDateString('en-ZA', { weekday:'long', day:'numeric', month:'short' }));
+  set('dfDelSub', sameDay
+    ? 'Order before 08:00 for same-day delivery'
+    : 'Weekday orders before 08:00 arrive same day · Mon–Fri only');
+
   const lines = distriOrderLines();
   const total = lines.reduce((s, x) => s + x.line, 0);
-  totalEl.innerHTML = `<span class="order-grand-lbl">Order · ${lines.length} item${lines.length !== 1 ? 's' : ''}</span>
-    <span class="order-grand-val">${R(total)}</span>`;
-  warnEl.innerHTML = lines.length && total < DISTRI_MIN_ORDER
-    ? `<div class="df-warn">⚠️ Below the ${R(DISTRI_MIN_ORDER)} minimum order — add ${R(DISTRI_MIN_ORDER - total)} more.</div>`
-    : '';
+  const d = distriState();
+  set('dfCountLbl', `${lines.length} item${lines.length !== 1 ? 's' : ''} to order`);
+  set('dfTotalVal', R(total));
+  const bar = document.getElementById('dfBar');
+  if (bar) {
+    bar.style.width = `${Math.min(100, (total / DISTRI_MIN_ORDER) * 100)}%`;
+    bar.classList.toggle('ok', total >= DISTRI_MIN_ORDER);
+  }
+  set('dfMinLbl', !lines.length ? 'Nothing to order yet'
+    : total >= DISTRI_MIN_ORDER ? '✓ Minimum reached'
+    : `${R(DISTRI_MIN_ORDER - total)} to go`);
+  const noCode = lines.filter(x => !d.codes[x.k]).length;
+  set('dfHeroNote', noCode ? `⚠️ ${noCode} item${noCode !== 1 ? 's' : ''} in this order ${noCode !== 1 ? 'have' : 'has'} no item code` : '');
+
+  const items = [...distriByKey.values()];
+  DISTRI_CHIPS.forEach(([id]) => {
+    set(`dfChipN-${id}`, String(items.filter(i => distriChipMatch(id, i)).length));
+  });
+}
+
+function setDistriField(k, field, raw) {
+  const d = distriState();
+  if (field === 'code') {
+    const v = raw.trim();
+    if (v) d.codes[k] = v; else delete d.codes[k];
+    save();
+    return;
+  }
+  const map = { stock: d.stock, buffer: d.buffer, optimal: d.optimalOverride, order: d.orderOverride }[field];
+  const v = String(raw).trim();
+  if (v === '') delete map[k];
+  else {
+    const n = Math.max(0, parseMoney(v));
+    map[k] = field === 'buffer' ? n : Math.round(n);
+  }
+  // New stock/optimal/buffer means the suggestion should take over again,
+  // rather than a stale hand-typed order qty silently winning.
+  if (field !== 'order') delete d.orderOverride[k];
+  save();
+}
+
+function bindDistriItemEvents(c) {
+  if (c.dataset.bound) return;
+  c.dataset.bound = '1';
+  const itemOf = el => {
+    const card = el.closest('.df-item');
+    return card ? [card, distriByKey.get(card.dataset.dfkey)] : [null, null];
+  };
+  c.addEventListener('input', e => {
+    const f = e.target.dataset.f;
+    if (!f) return;
+    const [card, item] = itemOf(e.target);
+    if (!item) return;
+    setDistriField(card.dataset.dfkey, f, e.target.value);
+    updateDistriItem(card, item);
+    rDistriSummary();
+  });
+  c.addEventListener('click', e => {
+    const btn = e.target.closest('[data-step]');
+    if (!btn) return;
+    const [card, item] = itemOf(btn);
+    if (!item) return;
+    const inp = card.querySelector('[data-f="stock"]');
+    const cur = inp.value.trim() === '' ? 0 : Math.round(parseMoney(inp.value));
+    const next = inp.value.trim() === '' && Number(btn.dataset.step) < 0 ? 0 : Math.max(0, cur + Number(btn.dataset.step));
+    inp.value = next;
+    setDistriField(card.dataset.dfkey, 'stock', String(next));
+    updateDistriItem(card, item);
+    rDistriSummary();
+  });
+  c.addEventListener('focusout', e => {
+    if (!e.target.dataset.f) return;
+    const [card, item] = itemOf(e.target);
+    if (item) updateDistriItem(card, item);
+  });
 }
 
 function rDistriView() {
   const c = document.getElementById('distriView');
   const d = distriState();
   const items = distriItems();
+  distriByKey = new Map(items.map(i => [distriKey(i), i]));
+  if (distriSettingsOpen === null) distriSettingsOpen = !d.since;
 
-  let h = `<div class="order-toolbar">
-    <button class="btn-primary" id="dfRefreshBtn">🔮 Update forecast</button>
-    <button class="btn-sec" id="dfPdfBtn">📄 PDF</button>
-    <button class="btn-sec" id="dfEmailBtn">✉️ Email</button>
-    <button class="btn-sec" id="dfResetBtn">↺ Reset order qty</button>
-  </div>
-  <div class="order-pad">
-    <div class="sum-card" style="margin-top:12px">
-      <div class="df-delivery" id="dfDelivery"></div>
-      <div class="f-row">
-        <div class="f-group"><label class="f-label">Cover (days)</label>
-          <input class="f-input" id="dfCoverDays" type="number" min="1" step="1" inputmode="numeric" value="${d.coverDays}"></div>
-        <div class="f-group"><label class="f-label">Default buffer %</label>
-          <input class="f-input" id="dfDefaultBuffer" type="number" min="0" step="1" inputmode="numeric" value="${d.defaultBuffer}"></div>
+  let h = `<div class="df-wrap">
+    <section class="df-hero">
+      <div class="df-hero-top">
+        <div>
+          <div class="df-eyebrow">Next delivery</div>
+          <div class="df-delivery-date" id="dfDelDate"></div>
+          <div class="df-delivery-sub" id="dfDelSub"></div>
+        </div>
+        <div class="df-hero-total">
+          <div class="df-eyebrow" id="dfCountLbl"></div>
+          <div class="df-total-val" id="dfTotalVal"></div>
+        </div>
       </div>
-      <div class="f-group" style="margin-bottom:0"><label class="f-label">Supplier email</label>
-        <input class="f-input" id="dfEmail" type="email" placeholder="orders@distrifoods.co.za" value="${esc(d.supplierEmail)}"></div>
-      <div class="f-group" style="margin:14px 0 0"><label class="f-label">Ordering from Distri Foods since</label>
-        <input class="f-input" id="dfSince" type="date" value="${esc(d.since)}"></div>
-      <div class="df-status" id="dfStatus"></div>
-    </div>`;
+      <div class="df-progress">
+        <div class="df-bar"><div class="df-bar-fill" id="dfBar"></div></div>
+        <div class="df-progress-lbl"><span id="dfMinLbl"></span><span>Minimum ${R(DISTRI_MIN_ORDER)}</span></div>
+      </div>
+      <div class="df-hero-note" id="dfHeroNote"></div>
+      <div class="df-hero-actions">
+        <button class="df-hero-btn primary" id="dfEmailBtn">✉️ Email order</button>
+        <button class="df-hero-btn ghost" id="dfPdfBtn">📄 PDF</button>
+      </div>
+    </section>
+
+    <details class="df-settings" id="dfSettings"${distriSettingsOpen ? ' open' : ''}>
+      <summary><span class="df-settings-title">⚙️ Settings &amp; forecast</span><span class="df-settings-sum" id="dfSettingsSum"></span><span class="df-chev">▾</span></summary>
+      <div class="df-settings-body">
+        <div class="f-row">
+          <div class="f-group"><label class="f-label">Cover (days)</label>
+            <input class="f-input" id="dfCoverDays" type="number" min="1" step="1" inputmode="numeric" value="${d.coverDays}"></div>
+          <div class="f-group"><label class="f-label">Default buffer %</label>
+            <input class="f-input" id="dfDefaultBuffer" type="number" min="0" step="1" inputmode="numeric" value="${d.defaultBuffer}"></div>
+        </div>
+        <div class="f-group"><label class="f-label">Ordering from Distri Foods since</label>
+          <input class="f-input" id="dfSince" type="date" value="${esc(d.since)}"></div>
+        <div class="f-group"><label class="f-label">Supplier email</label>
+          <input class="f-input" id="dfEmail" type="email" placeholder="orders@distrifoods.co.za" value="${esc(d.supplierEmail)}"></div>
+        <div class="df-status" id="dfStatus"></div>
+        <div class="df-settings-actions">
+          <button class="df-pill" id="dfRefreshBtn">🔮 Update forecast</button>
+          <button class="df-pill" id="dfResetBtn">↺ Clear typed order qtys</button>
+        </div>
+      </div>
+    </details>`;
 
   if (!items.length) {
     h += `<div class="empty" style="padding:40px 0"><div class="empty-ico">🚚</div>
       <h2 class="empty-ttl">No Distri Foods items</h2>
       <p class="empty-sub">Items appear here when their store in the catalogue sheet is "Distri Foods".<br>Sync the catalogue from the Library tab.</p></div>`;
   } else {
-    h += `<input class="quick-input df-search" id="dfSearch" type="text" placeholder="Filter items…" autocomplete="off" value="${esc(distriFilter)}">`;
-    items.forEach(item => { h += distriRowHtml(item); });
+    h += `<div class="df-tools">
+      <input class="quick-input df-search" id="dfSearch" type="search" placeholder="Search items or codes…" autocomplete="off" value="${esc(distriFilter)}">
+      <div class="df-chips">${DISTRI_CHIPS.map(([id, label]) =>
+        `<button class="df-chip${distriChip === id ? ' active' : ''}" data-chip="${id}">${label}<span class="df-chip-n" id="dfChipN-${id}"></span></button>`).join('')}
+      </div>
+    </div>`;
+    const groups = new Map();
+    items.forEach(i => {
+      const cat = i.category || 'Other';
+      if (!groups.has(cat)) groups.set(cat, []);
+      groups.get(cat).push(i);
+    });
+    [...groups.keys()].sort((a, b) => a.localeCompare(b)).forEach(cat => {
+      const list = groups.get(cat);
+      h += `<section class="df-group">
+        <div class="df-cat"><span class="df-cat-dot" style="background:${catColor(cat)}"></span>
+          <span class="df-cat-name">${esc(cat)}</span><span class="df-cat-n">${list.length}</span></div>
+        ${list.map(distriItemHtml).join('')}
+      </section>`;
+    });
+    h += `<div class="df-nomatch" id="dfNoMatch" hidden>No items match this filter.</div>`;
   }
-  h += `<div class="order-grand-total" id="dfTotal"></div><div id="dfMinWarn"></div></div>`;
+  h += `</div>`;
   c.innerHTML = h;
 
-  const byKey = new Map(items.map(i => [distriKey(i), i]));
-  c.querySelectorAll('.df-row').forEach(row => {
-    const k = row.dataset.dfkey;
-    const item = byKey.get(k);
-    updateDistriRow(row, item);
-    row.querySelectorAll('.df-in').forEach(inp => {
-      inp.addEventListener('input', () => {
-        const map = { stock: d.stock, buffer: d.buffer, optimal: d.optimalOverride, order: d.orderOverride }[inp.dataset.f];
-        const v = inp.value.trim();
-        if (v === '') delete map[k];
-        else {
-          const n = Math.max(0, parseMoney(v));
-          map[k] = inp.dataset.f === 'buffer' ? n : Math.round(n);
-        }
-        // New stock/optimal/buffer means the suggestion should take over again,
-        // rather than a stale hand-typed order qty silently winning.
-        if (inp.dataset.f !== 'order') delete d.orderOverride[k];
-        save();
-        updateDistriRow(row, item);
-        rDistriSummary();
-        if (inp.dataset.f === 'stock') rDistriStatus();
-      });
-      inp.addEventListener('blur', () => updateDistriRow(row, item));
-    });
-  });
+  bindDistriItemEvents(c);
+  updateAllDistriItems();
 
-  const applyFilter = () => {
-    const q = distriFilter.trim().toLowerCase();
-    c.querySelectorAll('.df-row').forEach(row => { row.hidden = !!q && !row.dataset.dfname.includes(q); });
-  };
-  document.getElementById('dfSearch')?.addEventListener('input', e => { distriFilter = e.target.value; applyFilter(); });
-  applyFilter();
-
+  document.getElementById('dfSettings').addEventListener('toggle', e => { distriSettingsOpen = e.target.open; });
   document.getElementById('dfCoverDays').addEventListener('input', e => {
     const n = Math.round(parseMoney(e.target.value));
     if (n < 1) return;
-    d.coverDays = n; save(); updateAllDistriRows(); rDistriSummary();
+    d.coverDays = n; save(); updateAllDistriItems(); rDistriSummary(); rDistriStatus();
   });
   document.getElementById('dfDefaultBuffer').addEventListener('input', e => {
     if (e.target.value.trim() === '') return;
-    d.defaultBuffer = Math.max(0, parseMoney(e.target.value)); save(); updateAllDistriRows(); rDistriSummary();
+    d.defaultBuffer = Math.max(0, parseMoney(e.target.value)); save(); updateAllDistriItems(); rDistriSummary(); rDistriStatus();
   });
   document.getElementById('dfEmail').addEventListener('input', e => { d.supplierEmail = e.target.value.trim(); save(); });
   document.getElementById('dfSince').addEventListener('change', e => { d.since = e.target.value; save(); fetchDistriForecast(); });
@@ -5587,31 +5838,44 @@ function rDistriView() {
   document.getElementById('dfPdfBtn').addEventListener('click', exportDistriPDF);
   document.getElementById('dfEmailBtn').addEventListener('click', openDistriEmail);
   document.getElementById('dfResetBtn').addEventListener('click', () => {
-    if (!Object.keys(d.orderOverride).length) { toast('No manual quantities to reset'); return; }
-    if (!confirm('Clear all manually entered order quantities and use the suggestions again?')) return;
+    if (!Object.keys(d.orderOverride).length) { toast('No typed order quantities to clear'); return; }
+    if (!confirm('Clear all typed order quantities and use the suggestions again?')) return;
     d.orderOverride = {}; save(); rDistriView();
   });
+  document.getElementById('dfSearch')?.addEventListener('input', e => { distriFilter = e.target.value; applyDistriFilter(); });
+  c.querySelectorAll('[data-chip]').forEach(b => b.addEventListener('click', () => {
+    distriChip = b.dataset.chip;
+    c.querySelectorAll('[data-chip]').forEach(x => x.classList.toggle('active', x === b));
+    applyDistriFilter();
+  }));
 
+  applyDistriFilter();
   rDistriStatus();
   rDistriSummary();
 }
 
-// Warn (but don't block) when the order is under the supplier minimum.
+// Warn (but don't block) about a sub-minimum order or items without a code.
 function distriConfirmReady(lines) {
-  if (!lines.length) { toast('Nothing to order yet — enter stock counts or order quantities'); return false; }
+  if (!lines.length) { toast('Nothing to order yet — count stock and set optimal levels'); return false; }
+  const d = distriState();
+  const warnings = [];
   const total = lines.reduce((s, x) => s + x.line, 0);
-  if (total < DISTRI_MIN_ORDER) {
-    return confirm(`This order is ${R(total)}, below the ${R(DISTRI_MIN_ORDER)} minimum. Continue anyway?`);
-  }
-  return true;
+  if (total < DISTRI_MIN_ORDER) warnings.push(`• The order is ${R(total)}, below the ${R(DISTRI_MIN_ORDER)} minimum.`);
+  const noCode = lines.filter(x => !d.codes[x.k]).map(x => x.item.name);
+  if (noCode.length) warnings.push(`• No item code for: ${noCode.join(', ')}.`);
+  return !warnings.length || confirm(`${warnings.join('\n')}\n\nContinue anyway?`);
 }
 
+// Supplier email lists codes and quantities only — no prices.
 function buildDistriEmail(lines) {
+  const d = distriState();
   const del = fmtDeliveryDate(distriDeliveryDate());
-  const total = lines.reduce((s, x) => s + x.line, 0);
   let body = `Hi Distri Foods,\n\nPlease could we place the following order for delivery on ${del}:\n\n`;
-  lines.forEach(x => { body += `• ${x.qty} × ${x.item.name}\n`; });
-  body += `\nEstimated total: ${R(total)}\n\nThank you!`;
+  lines.forEach(x => {
+    const code = d.codes[x.k];
+    body += `• ${code ? code + ' – ' : ''}${x.item.name} – Qty: ${x.qty}\n`;
+  });
+  body += `\nThank you!`;
   return { subject: `Order for delivery ${del}`, body };
 }
 
@@ -5633,7 +5897,9 @@ function exportDistriPDF() {
   const doc = new jsPDF({ orientation: 'portrait', unit: 'mm', format: 'a4' });
   const DARK = [44, 26, 16], AMBER = [184, 115, 51], CREAM = [250, 246, 240], WHITE = [255, 255, 255];
   const PW = 210, ML = 14, MR = 14, CW = PW - ML - MR;
+  const codes = distriState().codes;
   const total = lines.reduce((s, x) => s + x.line, 0);
+  const X = { code: ML + 3, item: ML + 33, qty: ML + 128, unit: ML + 156 };
 
   const header = () => {
     doc.setFillColor(...DARK);
@@ -5651,9 +5917,10 @@ function exportDistriPDF() {
     doc.setFont('helvetica', 'bold');
     doc.setFontSize(8);
     doc.setTextColor(...WHITE);
-    doc.text('ITEM', ML + 3, y + 5.5);
-    doc.text('QTY', ML + 125, y + 5.5, { align: 'right' });
-    doc.text('UNIT PRICE', ML + 155, y + 5.5, { align: 'right' });
+    doc.text('CODE', X.code, y + 5.5);
+    doc.text('ITEM', X.item, y + 5.5);
+    doc.text('QTY', X.qty, y + 5.5, { align: 'right' });
+    doc.text('UNIT PRICE', X.unit, y + 5.5, { align: 'right' });
     doc.text('TOTAL', PW - MR - 3, y + 5.5, { align: 'right' });
     return y + 8;
   };
@@ -5669,16 +5936,18 @@ function exportDistriPDF() {
   doc.text(`Requested delivery: ${fmtDeliveryDate(distriDeliveryDate())}`, ML, y);
   y = colHeader(y + 8);
 
-  doc.setFontSize(9);
   lines.forEach((x, idx) => {
-    if (y > 270) { doc.addPage(); header(); y = colHeader(26); doc.setFontSize(9); }
+    if (y > 270) { doc.addPage(); header(); y = colHeader(26); }
     doc.setFillColor(...(idx % 2 ? CREAM : WHITE));
     doc.rect(ML, y, CW, 8, 'F');
-    doc.setFont('helvetica', 'normal');
+    doc.setFontSize(9);
     doc.setTextColor(...DARK);
-    doc.text(doc.splitTextToSize(x.item.name, 100)[0], ML + 3, y + 5.5);
-    doc.text(String(x.qty), ML + 125, y + 5.5, { align: 'right' });
-    doc.text(x.item.price > 0 ? R(x.item.price) : '-', ML + 155, y + 5.5, { align: 'right' });
+    doc.setFont('helvetica', 'bold');
+    doc.text(doc.splitTextToSize(codes[x.k] || '-', 28)[0], X.code, y + 5.5);
+    doc.setFont('helvetica', 'normal');
+    doc.text(doc.splitTextToSize(x.item.name, 72)[0], X.item, y + 5.5);
+    doc.text(String(x.qty), X.qty, y + 5.5, { align: 'right' });
+    doc.text(x.item.price > 0 ? R(x.item.price) : '-', X.unit, y + 5.5, { align: 'right' });
     doc.text(x.item.price > 0 ? R(x.line) : '-', PW - MR - 3, y + 5.5, { align: 'right' });
     y += 8;
   });
