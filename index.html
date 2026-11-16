@@ -1979,7 +1979,7 @@ function trackSelection(d) {
 
   if (!S.savedItems) S.savedItems = [];
   let entry = S.savedItems.find(s => s.name.toLowerCase() === d.name.toLowerCase());
-  if (!entry) {
+  if (!entry && !isLibDeleted(d.name)) {
     entry = {
       id: uid(), name: d.name, category: d.category || 'Other',
       store: d.store || 'any', price: d.price || 0, quantity: 1, notes: '',
@@ -1987,9 +1987,11 @@ function trackSelection(d) {
     };
     S.savedItems.unshift(entry);
   }
-  if (!entry.storeCounts) entry.storeCounts = {};
-  entry.storeCounts[storeCtx] = (entry.storeCounts[storeCtx] || 0) + 1;
-  save();
+  if (entry) {
+    if (!entry.storeCounts) entry.storeCounts = {};
+    entry.storeCounts[storeCtx] = (entry.storeCounts[storeCtx] || 0) + 1;
+    save();
+  }
 
   logSelectionToSheet({
     deviceId:   DEVICE_ID,
@@ -2037,11 +2039,10 @@ async function restoreHistoryFromSheet() {
       const storeKey = (h.store || '').trim().toLowerCase();
       const storeId  = (!storeKey || storeKey === 'any') ? 'any' : (storeIdMap[storeKey] || 'any');
 
-      let entry = S.savedItems.find(s => s.name.toLowerCase() === name.toLowerCase());
-      if (!entry) {
-        entry = { id: uid(), name, category: 'Other', store: storeId, price: 0, quantity: 1, notes: '', fromSheet: false, storeCounts: {} };
-        S.savedItems.unshift(entry);
-      }
+      // Only top up rankings for items still in the Library — never re-create
+      // ones that were deleted (their Selections rows stay in the Sheet forever).
+      const entry = S.savedItems.find(s => s.name.toLowerCase() === name.toLowerCase());
+      if (!entry) return;
       if (!entry.storeCounts) entry.storeCounts = {};
       // Take the higher of what's already local vs what the Sheet has —
       // never lets a count go backwards, just fills in what's missing.
@@ -2532,11 +2533,37 @@ function saveToLibrary(d) {
   };
   if (existing >= 0) S.savedItems[existing] = entry;
   else S.savedItems.unshift(entry);
+  // Ticking "Save to library" is an explicit choice, so it overrides an earlier delete.
+  unmarkLibDeleted(d.name);
   save();
 }
 function deleteFromLibrary(id) {
-  S.savedItems = (S.savedItems||[]).filter(s => s.id !== id);
-  save(); rLibraryView();
+  removeLibraryItems((S.savedItems || []).filter(s => s.id === id));
+  rLibraryView();
+}
+
+// Self-added Library items deleted on this device are remembered by name, so
+// neither adding the item to a list again nor the Sheet history restore can
+// quietly bring them back. Catalogue (Sheet) items are not affected: the
+// Sheet stays the source of truth for those.
+function libDeletedSet() {
+  if (!Array.isArray(S.deletedLibNames)) S.deletedLibNames = [];
+  return new Set(S.deletedLibNames);
+}
+function isLibDeleted(name) {
+  return libDeletedSet().has(String(name || '').trim().toLowerCase());
+}
+function unmarkLibDeleted(name) {
+  const k = String(name || '').trim().toLowerCase();
+  if (Array.isArray(S.deletedLibNames)) S.deletedLibNames = S.deletedLibNames.filter(n => n !== k);
+}
+function removeLibraryItems(items) {
+  const ids = new Set(items.map(i => i.id));
+  const deleted = libDeletedSet();
+  items.filter(i => i.fromSheet !== true).forEach(i => deleted.add(i.name.trim().toLowerCase()));
+  S.deletedLibNames = [...deleted];
+  S.savedItems = (S.savedItems || []).filter(i => !ids.has(i.id));
+  save();
 }
 
 function openLibEditModal(id) {
@@ -2833,8 +2860,7 @@ function rManagePanel() {
       const item = (S.savedItems || []).find(i => i.id === id);
       if (!item) return;
       if (!confirm(`Delete "${item.name}" from the catalogue?`)) return;
-      S.savedItems = S.savedItems.filter(i => i.id !== id);
-      save();
+      removeLibraryItems([item]);
       rManagePanel();
       rLibraryResults();
       toast(`Deleted: ${item.name}`);
@@ -2851,8 +2877,7 @@ function rManagePanel() {
       if (grpItems.length === 0) return;
       const label = isSheet ? 'synced (Sheet)' : 'manually added';
       if (!confirm(`Delete all ${grpItems.length} ${label} items from the catalogue?\nThis cannot be undone.`)) return;
-      S.savedItems = (S.savedItems || []).filter(i => (i.fromSheet === true) !== isSheet);
-      save();
+      removeLibraryItems(grpItems);
       rManagePanel();
       rLibraryResults();
       toast(`Deleted ${grpItems.length} ${label} items`);
@@ -5299,6 +5324,7 @@ function uploadLibrary(event) {
         const entry = { id: item.id || uid(), name: item.name, category: item.category || 'Other', store: item.store || 'any', price: item.price || 0, quantity: item.quantity || 1, notes: item.notes || '' };
         if (idx >= 0) { existing[idx] = { ...existing[idx], ...entry }; updated++; }
         else { existing.push(entry); added++; }
+        unmarkLibDeleted(item.name);
       });
       S.savedItems = existing;
       save(); rLibraryView();
